@@ -72,7 +72,7 @@ class CenterHead(nn.Module):
 
         self.forward_ret_dict['cls_preds'] = cls_preds
         self.forward_ret_dict['box_preds'] = box_preds
-
+        
         if self.training:
             targets_dict = self.assign_targets(
                 gt_boxes=data_dict['gt_boxes']
@@ -134,22 +134,24 @@ class CenterHead(nn.Module):
                         boxes are valid.
         """
         gt_bboxes_3d, gt_labels_3d = gt_boxes[..., :-1], gt_boxes[..., -1]
+        device = gt_bboxes_3d.device
 
         heatmaps, anno_boxes, inds, masks = multi_apply(
-            self.get_targets_single, gt_bboxes_3d, gt_labels_3d)
+            self.get_targets_single, gt_bboxes_3d.to(device='cpu'), gt_labels_3d.to(device='cpu'))
         # transpose heatmaps, because the dimension of tensors in each task is
         # different, we have to use numpy instead of torch to do the transpose.
+
         heatmaps = np.array(heatmaps).transpose(1, 0).tolist()
-        heatmaps = [torch.stack(hms_) for hms_ in heatmaps]
+        heatmaps = [torch.stack(hms_).to(device) for hms_ in heatmaps]
         # transpose anno_boxes
         anno_boxes = np.array(anno_boxes).transpose(1, 0).tolist()
-        anno_boxes = [torch.stack(anno_boxes_) for anno_boxes_ in anno_boxes]
+        anno_boxes = [torch.stack(anno_boxes_).to(device) for anno_boxes_ in anno_boxes]
         # transpose inds
         inds = np.array(inds).transpose(1, 0).tolist()
-        inds = [torch.stack(inds_) for inds_ in inds]
-        # transpose inds
+        inds = [torch.stack(inds_).to(device) for inds_ in inds]
+        # transpose masks
         masks = np.array(masks).transpose(1, 0).tolist()
-        masks = [torch.stack(masks_) for masks_ in masks]
+        masks = [torch.stack(masks_).to(device) for masks_ in masks]
         
         all_targets_dict = {
             'heatmaps': heatmaps,
@@ -190,6 +192,7 @@ class CenterHead(nn.Module):
         voxel_size = torch.tensor(self.target_cfg.VOXEL_SIZE)
 
         feature_map_size = grid_size[:2] // self.target_cfg.OUT_SIZE_FACTOR
+        feature_map_size = feature_map_size.to(device, dtype=torch.int32)
 
         """
         # reorganize the gt_dict by tasks
@@ -287,8 +290,9 @@ class CenterHead(nn.Module):
                     rot = task_boxes[idx][k][6]
                     box_dim = task_boxes[idx][k][3:6]
                     box_dim = box_dim.log()
+                    
                     anno_box[new_idx] = torch.cat([
-                        center - torch.tensor([x, y], device=device),
+                        center - torch.tensor([x, y], device=device, dtype=torch.float32),
                         z.unsqueeze(0), box_dim,
                         torch.sin(rot).unsqueeze(0),
                         torch.cos(rot).unsqueeze(0),
@@ -328,8 +332,8 @@ class CenterHead(nn.Module):
         ys = ys.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device)
         xs = xs.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device)
 
-        xs = xs.view(batch, -1, 1) + batch_reg[:, :, 0:1]
-        ys = ys.view(batch, -1, 1) + batch_reg[:, :, 1:2]
+        xs = xs.view(batch, -1, 1).float() + batch_reg[:, :, 0:1]
+        ys = ys.view(batch, -1, 1).float() + batch_reg[:, :, 1:2]
 
         xs = xs * self.target_cfg.OUT_SIZE_FACTOR * self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
         ys = ys * self.target_cfg.OUT_SIZE_FACTOR * self.target_cfg.VOXEL_SIZE[1] + self.point_cloud_range[1]
@@ -352,8 +356,9 @@ class CenterHead(nn.Module):
 
     def get_cls_layer_loss(self):
         # NHWC -> NCHW 
-        pred_heatmaps = clip_sigmoid(self.forward_ret_dict['cls_preds']).permute(0, 3, 1, 2) 
-        gt_heatmaps =  self.forward_ret_dict['heatmaps'][0]
+        pred_heatmaps = clip_sigmoid(self.forward_ret_dict['cls_preds']).permute(0, 3, 1, 2)
+        device = pred_heatmaps.device 
+        gt_heatmaps =  self.forward_ret_dict['heatmaps'][0].to(device)
         num_pos = gt_heatmaps.eq(1).float().sum().item()
 
         cls_loss = self.loss_cls(
@@ -678,7 +683,7 @@ def gaussian_focal_loss(pred, gaussian_target, alpha=2.0, gamma=4.0):
             factor. Defaults to 4.0.
     """
     eps = 1e-12
-    pos_weights = gaussian_target.eq(1)
+    pos_weights = gaussian_target.eq(1).float()
     neg_weights = (1 - gaussian_target).pow(gamma)
     pos_loss = -(pred + eps).log() * (1 - pred).pow(alpha) * pos_weights
     neg_loss = -(1 - pred + eps).log() * pred.pow(alpha) * neg_weights
