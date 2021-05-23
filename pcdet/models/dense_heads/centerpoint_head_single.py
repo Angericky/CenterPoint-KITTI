@@ -108,7 +108,14 @@ class CenterHead(nn.Module):
         """
         dim = feat.size(2)
         ind = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim)
+
+        invalid_inds = torch.nonzero(ind == -1)
+        invalid_inds_tuple = tuple((invalid_inds[:, 0], invalid_inds[:, 1], invalid_inds[:, 2]))
+        
+        ind[invalid_inds_tuple] = 0
         feat = feat.gather(1, ind)
+        feat[invalid_inds_tuple] = 0
+
         if mask is not None:
             mask = mask.unsqueeze(2).expand_as(feat)
             feat = feat[mask]

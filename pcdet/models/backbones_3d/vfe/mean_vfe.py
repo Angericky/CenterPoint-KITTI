@@ -15,7 +15,7 @@ class MeanVFE(VFETemplate):
         """
         Args:
             batch_dict:
-                voxels: (num_voxels, max_points_per_voxel, C)
+                voxels: (num_voxels, max_points_per_voxel, C) C=4
                 voxel_num_points: optional (num_voxels)
             **kwargs:
 
