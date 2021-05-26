@@ -153,11 +153,27 @@ class Detector3DTemplate(nn.Module):
     def build_roi_head(self, model_info_dict):
         if self.model_cfg.get('ROI_HEAD', None) is None:
             return None, model_info_dict
-        point_head_module = roi_heads.__all__[self.model_cfg.ROI_HEAD.NAME](
-            model_cfg=self.model_cfg.ROI_HEAD,
-            input_channels=model_info_dict['num_point_features'],
-            num_class=self.num_class if not self.model_cfg.ROI_HEAD.CLASS_AGNOSTIC else 1,
-        )
+        if self.model_cfg.ROI_HEAD.NAME == 'VoxelRCNNHead':
+            num_point_features = {}
+            num_point_features.update({
+                'x_conv1': 16,
+                'x_conv2': 32,
+                'x_conv3': 64,
+                'x_conv4': 64,
+            })
+            point_head_module = roi_heads.__all__[self.model_cfg.ROI_HEAD.NAME](
+                model_cfg=self.model_cfg.ROI_HEAD,
+                input_channels=num_point_features,
+                point_cloud_range=model_info_dict['point_cloud_range'],
+                voxel_size=model_info_dict['voxel_size'],
+                num_class=self.num_class if not self.model_cfg.ROI_HEAD.CLASS_AGNOSTIC else 1,
+            )
+        else:
+            point_head_module = roi_heads.__all__[self.model_cfg.ROI_HEAD.NAME](
+                model_cfg=self.model_cfg.ROI_HEAD,
+                input_channels=model_info_dict['num_point_features'],
+                num_class=self.num_class if not self.model_cfg.ROI_HEAD.CLASS_AGNOSTIC else 1,
+            )
 
         model_info_dict['module_list'].append(point_head_module)
         return point_head_module, model_info_dict

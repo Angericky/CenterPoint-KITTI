@@ -157,6 +157,12 @@ class VoxelBackBone8x(nn.Module):
                 'x_conv2': x_conv2,
                 'x_conv3': x_conv3,
                 'x_conv4': x_conv4,
+            },
+            'multi_scale_3d_strides': {
+                'x_conv1': 1,
+                'x_conv2': 2,
+                'x_conv3': 4,
+                'x_conv4': 8,
             }
         })
 

@@ -1,7 +1,7 @@
 from .detector3d_template import Detector3DTemplate
 
 
-class PVRCNN(Detector3DTemplate):
+class VoxelRCNN(Detector3DTemplate):
     def __init__(self, model_cfg, num_class, dataset):
         super().__init__(model_cfg=model_cfg, num_class=num_class, dataset=dataset)
         self.module_list = self.build_networks()
@@ -23,10 +23,18 @@ class PVRCNN(Detector3DTemplate):
 
     def get_training_loss(self):
         disp_dict = {}
+        loss = 0
         
         loss_rpn, tb_dict = self.dense_head.get_loss()
-        loss_point, tb_dict = self.point_head.get_loss(tb_dict)
-        loss_rcnn, tb_dict = self.roi_head.get_loss(tb_dict)
+        loss = loss + loss_rpn
 
-        loss = loss_rpn + loss_point + loss_rcnn
+        if self.point_head is not None:
+            loss_point, tb_dict = self.point_head.get_loss(tb_dict)
+            loss = loss + loss_point
+        
+        loss_rcnn, tb_dict = self.roi_head.get_loss(tb_dict)
+        loss = loss + loss_rcnn
+
+        # loss = loss_rpn + loss_point + loss_rcnn
+        # loss = loss_rpn + loss_rcnn
         return loss, tb_dict, disp_dict
