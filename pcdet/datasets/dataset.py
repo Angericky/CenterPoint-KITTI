@@ -2,6 +2,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+from numpy.lib.arraysetops import unique
 import torch.utils.data as torch_data
 
 from ..utils import common_utils
@@ -9,6 +10,18 @@ from .augmentor.data_augmentor import DataAugmentor
 from .processor.data_processor import DataProcessor
 from .processor.point_feature_encoder import PointFeatureEncoder
 
+def cart2polar(xyz):
+    rho = np.sqrt(xyz[:, 0] ** 2 + xyz[:, 1] ** 2)
+    phi = np.arctan2(xyz[:, 1], xyz[:, 0])
+    return np.stack((rho, phi, xyz[:, 2]), axis=1)
+
+def polar2cat(xyz_polar):
+    x = xyz_polar[0] * np.cos(xyz_polar[1])
+    y = xyz_polar[0] * np.sin(xyz_polar[1])
+    return np.stack((x, y, xyz_polar[2]), axis=0)
+
+def get_distance(x, y):
+    return np.sqrt(x ** 2 + y ** 2)
 
 class DatasetTemplate(torch_data.Dataset):
     def __init__(self, dataset_cfg=None, class_names=None, training=True, root_path=None, logger=None):
@@ -141,6 +154,113 @@ class DatasetTemplate(torch_data.Dataset):
         data_dict = self.data_processor.forward(
             data_dict=data_dict
         )
+
+        # replace 'voxels'(V, max_num, C=4) and 'voxel_coords'(V, C=3) (L, W, H)  in data_dicts
+        xyz = data_dict['points'][:, :3]
+
+        xyz_pol = cart2polar(xyz)   # (N, 3)
+
+        pol_feats = np.concatenate((xyz_pol, data_dict['points'][:, 3][:, np.newaxis]), axis=1)
+
+        # max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
+        # min_bound_r = np.percentile(xyz_pol[:, 0], 0, axis=0)
+        # max_bound_p_z = np.max(xyz_pol[:, 1:], axis=0)
+        # min_bound_p_z = np.min(xyz_pol[:, 1:], axis=0)
+        
+        # max_bound = np.concatenate(([max_bound_r], max_bound_p_z))
+        # min_bound = np.concatenate(([min_bound_r], min_bound_p_z))
+
+        # # get grid index
+        # crop_range = max_bound - min_bound
+
+        # print('angle: ', max_bound[1], min_bound[1], 'crop_range: ', crop_range)
+        x_max = self.point_cloud_range[0]
+        x_min = self.point_cloud_range[3]
+        y_max = self.point_cloud_range[1]
+        y_min = self.point_cloud_range[4]
+
+        distances = np.array([get_distance(x_max, y_max), get_distance(x_max, y_min), get_distance(x_min, y_max), get_distance(x_min, y_min)])
+        max_distance = distances.max()
+
+        max_bound = np.array([max_distance, np.pi / 2, self.point_cloud_range[-1]])
+        min_bound = np.array([0, -np.pi / 2, self.point_cloud_range[2]])
+
+        crop_range = max_bound - min_bound
+        cur_grid_size = self.grid_size
+        intervals = crop_range / (cur_grid_size - 1)
+
+        if (intervals == 0).any(): print("Zero interval!")
+        cy_grid_ind = (np.floor((np.clip(xyz_pol, min_bound, max_bound) - min_bound) / intervals)).astype(np.int)
+        
+        # sort potential repeated grid_inds first by the 1st col, then 3nd col, then 3rd col. 
+        sorted_indices = np.lexsort((cy_grid_ind[:, 2], cy_grid_ind[:, 1], cy_grid_ind[:, 0]))
+        sorted_pol_feats = pol_feats[sorted_indices]
+        sorted_cy_grid_ind = cy_grid_ind[sorted_indices]
+        unique_grid_ind, first_indexes, grid_cnts = np.unique(sorted_cy_grid_ind, axis=0, return_index=True, return_counts=True)
+        
+        # get a list of all indices of unique elements in a numpy array
+        sector_feats = np.split(sorted_pol_feats, first_indexes[1:])
+        voxel_max_num = data_dict['voxels'].shape[1]
+        sectors = np.zeros((unique_grid_ind.shape[0], voxel_max_num, 4))
+        num = 0
+        for i in range(len(sector_feats)):
+            if sector_feats[i].shape[0] > 5:
+                num += 1
+                grid_cnts[i] = 5
+                sectors[i, :] = sector_feats[i][np.random.choice(sector_feats[i].shape[0], 5, replace=False)]
+            else:
+                sectors[i, :sector_feats[i].shape[0]] = sector_feats[i]
+        # print('num: ', num)
+
+        voxel_coords = data_dict['voxel_coords']
+        voxels = data_dict['voxels']
+
+        # import pdb
+        # pdb.set_trace()
+
+        data_dict['voxel_coords'] = unique_grid_ind[:, [2, 1, 0]]
+        data_dict['voxels'] = sectors
+        data_dict['voxel_num_points'] = grid_cnts
+
+        # input_sp_tensor = spconv.SparseConvTensor(
+        #     features=voxel_features,
+        #     indices=voxel_coords.int(),
+        #     spatial_shape=self.sparse_shape,
+        #     batch_size=batch_size
+        # )
+
+        # voxel_position = np.zeros(self.grid_size, dtype=np.float32)
+        # dim_array = np.ones(len(self.grid_size) + 1, int)
+        # dim_array[0] = -1
+        # # voxel_position (3, H, W, L)
+        # voxel_position = np.indices(self.grid_size) * intervals.reshape(dim_array) + min_bound.reshape(dim_array)  
+        
+        # import pdb
+        # pdb.set_trace()
+
+        # # get xyz of different polar: voxel_position: (3, H, W, Z)
+        # voxel_position = polar2cat(voxel_position)
+
+        # processed_label = np.ones(self.grid_size, dtype=np.uint8) #* self.ignore_label
+        # #label_voxel_pair = np.concatenate([grid_ind, labels], axis=1)
+        # #label_voxel_pair = label_voxel_pair[np.lexsort((grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2])), :]
+        # #processed_label = nb_process_label(np.copy(processed_label), label_voxel_pair)
+        
+        # # processed_label: (H, W, Z)
+        # data_tuple = (voxel_position, processed_label)
+
+        # # center data on each voxel for PTnet
+        # voxel_centers = (cy_grid_ind.astype(np.float32) + 0.5) * intervals + min_bound
+        # return_xyz = xyz_pol - voxel_centers    # (N, 3) points' cylinder offset to voxel centers
+        # return_xyz = np.concatenate((return_xyz, xyz_pol, xyz[:, :2]), axis=1)  # (N, 8)
+
+        # return_fea = return_xyz
+
+        # if self.return_test:
+        #     data_tuple += (grid_ind, return_fea, index)
+        # else:
+        #     data_tuple += (grid_ind, return_fea)
+
         data_dict.pop('gt_names', None)
 
         return data_dict
