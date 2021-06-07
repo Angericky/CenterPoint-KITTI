@@ -34,6 +34,7 @@ class CenterHead(nn.Module):
         self.class_names = [class_names]
         self.predict_boxes_when_training = predict_boxes_when_training
         self.use_multihead = self.model_cfg.get('USE_MULTIHEAD', False)
+        self.cylind = self.model_cfg.get('CYLIND_GRID', False)
 
         target_cfg = self.model_cfg.TARGET_ASSIGNER_CONFIG
 
@@ -267,7 +268,7 @@ class CenterHead(nn.Module):
                     x, y, z = task_boxes[idx][k][0], task_boxes[idx][k][
                         1], task_boxes[idx][k][2]
 
-                    if self.model_cfg.get('CYLIND_GRID') != None:
+                    if self.cylind:
                         rho = np.sqrt(x ** 2 + y ** 2)
                         phi = np.arctan2(y, x)
 
@@ -288,7 +289,6 @@ class CenterHead(nn.Module):
                             y - pc_range[1]
                         ) / voxel_size[1] / self.target_cfg.OUT_SIZE_FACTOR
 
-
                     center = torch.tensor([coor_x, coor_y],
                                         dtype=torch.float32,
                                         device=device)
@@ -304,14 +304,19 @@ class CenterHead(nn.Module):
 
                     new_idx = k
                     x, y = center_int[0], center_int[1]
-
+                    
                     assert (y * feature_map_size[0] + x <
                             feature_map_size[0] * feature_map_size[1])
 
                     ind[new_idx] = y * feature_map_size[0] + x
                     mask[new_idx] = 1
                     rot = task_boxes[idx][k][6]
-                    box_dim = task_boxes[idx][k][3:6]
+
+                    if self.cylind:
+                        box_dim = task_boxes[idx][k][3:6]
+                    else:
+                        box_dim = task_boxes[idx][k][3:6]
+
                     box_dim = box_dim.log()
                     
                     anno_box[new_idx] = torch.cat([

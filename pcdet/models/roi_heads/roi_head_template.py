@@ -244,7 +244,13 @@ class RoIHeadTemplate(nn.Module):
         batch_box_preds = box_preds.view(batch_size, -1, code_size)
 
         roi_ry = rois[:, :, 6].view(-1)
-        roi_xyz = rois[:, :, 0:3].view(-1, 3)
+        if self.model_cfg.get('CYLIND_GRID', False):
+            roi_rpz = rois[:, :, 0:3].view(-1, 3)
+            roi_xyz = roi_rpz.clone()
+            roi_xyz[:, 0] = roi_rpz[:, 0] * torch.cos(roi_rpz[:, 1])
+            roi_xyz[:, 1] = roi_rpz[:, 0] * torch.sin(roi_rpz[:, 1])
+        else:
+            roi_xyz = rois[:, :, 0:3].view(-1, 3)
         local_rois = rois.clone().detach()
         local_rois[:, :, 0:3] = 0
 

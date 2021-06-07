@@ -53,6 +53,8 @@ class DatasetTemplate(torch_data.Dataset):
         self.total_epochs = 0
         self._merge_all_iters_to_one_epoch = False
 
+        self.sum_grid_ind = np.zeros((0, 3))
+
     @property
     def mode(self):
         return 'train' if self.training else 'test'
@@ -106,6 +108,13 @@ class DatasetTemplate(torch_data.Dataset):
 
         """
         raise NotImplementedError
+    
+    def statistics(grid_ind, grid_size, nonempty_voxel_num):
+        all_voxels = grid_size[0] / 8 * grid_size[1] * grid_size[2]
+        for i in range(8):
+            distance = (i + 1) * grid_size[0] / 8
+            nonempty_voxel_num[i] += grid_ind[grid_ind[:, 0] < distance].shape
+        
 
     def prepare_data(self, data_dict):
         """
@@ -161,7 +170,7 @@ class DatasetTemplate(torch_data.Dataset):
 
         xyz_pol = cart2polar(xyz)   # (N, 3)
 
-        pol_feats = np.concatenate((xyz_pol, data_dict['points'][:, 3][:, np.newaxis]), axis=1)
+        pol_feats = np.concatenate((xyz, data_dict['points'][:, 3][:, np.newaxis]), axis=1)
 
         max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
         min_bound_r = np.percentile(xyz_pol[:, 0], 0, axis=0)
@@ -192,7 +201,7 @@ class DatasetTemplate(torch_data.Dataset):
 
         cur_grid_size = self.grid_size
         intervals = crop_range / (cur_grid_size - 1)
-        # print('crop_range: ',crop_range, ' intervals: ', intervals)
+        # print('crop_range: ',crop_range,'max_bound: ', max_bound, 'min_bound: ', min_bound, ' intervals: ', intervals)
 
         if (intervals == 0).any(): print("Zero interval!")
         cy_grid_ind = (np.floor((np.clip(xyz_pol, min_bound, max_bound) - min_bound) / intervals)).astype(np.int)
@@ -223,6 +232,7 @@ class DatasetTemplate(torch_data.Dataset):
         data_dict['voxels'] = sectors
         data_dict['voxel_num_points'] = grid_cnts
 
+        # self.sum_grid_ind = np.unique(np.concatenate((self.sum_grid_ind, unique_grid_ind)), axis=0)
         # input_sp_tensor = spconv.SparseConvTensor(
         #     features=voxel_features,
         #     indices=voxel_coords.int(),
