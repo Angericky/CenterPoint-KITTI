@@ -2,7 +2,7 @@ CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
 
 DATA_CONFIG:
     _BASE_CONFIG_: tools/cfgs/dataset_configs/kitti_dataset.yaml
-    CYLIND_RANGE: [80.97011927, 3.14159265, 4]
+    CYLIND_RANGE: [0, -1.57079633, -3, 80.97011927, 1.57079633, 1]
     DATA_AUGMENTOR:
         DISABLE_AUG_LIST: ['placeholder']
         AUG_CONFIG_LIST:
@@ -78,6 +78,7 @@ MODEL:
     ROI_HEAD:
         NAME: VoxelRCNNHead
         CLASS_AGNOSTIC: True
+        CYLIND_GRID: True
 
         SHARED_FC: [256, 256]
         CLS_FC: [256, 256]
