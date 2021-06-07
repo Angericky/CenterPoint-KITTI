@@ -2,6 +2,7 @@ CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
 
 DATA_CONFIG:
     _BASE_CONFIG_: tools/cfgs/dataset_configs/kitti_dataset.yaml
+    CYLIND_RANGE: [80.97011927, 3.14159265, 4]
     DATA_AUGMENTOR:
         DISABLE_AUG_LIST: ['placeholder']
         AUG_CONFIG_LIST:
@@ -54,13 +55,15 @@ MODEL:
     DENSE_HEAD:
         NAME: CenterHead
         CLASS_AGNOSTIC: False
+        CYLIND_GRID: True
 
         USE_DIRECTION_CLASSIFIER: False 
 
         TARGET_ASSIGNER_CONFIG:
             MAX_OBJS: 100
             VOXEL_SIZE: [0.05, 0.05, 0.1]
-            OUT_SIZE_FACTOR: 4 
+            CYLIND_SIZE: [0.05754806, 0.00196472, 0.1025641]
+            OUT_SIZE_FACTOR: 4
             GAUSSIAN_OVERLAP: 0.1
             MIN_RADIUS: 2
             BOX_CODER: ResidualCoder

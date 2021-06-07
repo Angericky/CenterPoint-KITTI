@@ -36,6 +36,7 @@ class DatasetTemplate(torch_data.Dataset):
             return
 
         self.point_cloud_range = np.array(self.dataset_cfg.POINT_CLOUD_RANGE, dtype=np.float32)
+        self.cylind_range = np.array(self.dataset_cfg.CYLIND_RANGE, dtype=np.float32) if hasattr(self.dataset_cfg, 'CYLIND_RANGE') else None
         self.point_feature_encoder = PointFeatureEncoder(
             self.dataset_cfg.POINT_FEATURE_ENCODING,
             point_cloud_range=self.point_cloud_range
@@ -162,18 +163,19 @@ class DatasetTemplate(torch_data.Dataset):
 
         pol_feats = np.concatenate((xyz_pol, data_dict['points'][:, 3][:, np.newaxis]), axis=1)
 
-        # max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
-        # min_bound_r = np.percentile(xyz_pol[:, 0], 0, axis=0)
-        # max_bound_p_z = np.max(xyz_pol[:, 1:], axis=0)
-        # min_bound_p_z = np.min(xyz_pol[:, 1:], axis=0)
+        max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
+        min_bound_r = np.percentile(xyz_pol[:, 0], 0, axis=0)
+        max_bound_p_z = np.max(xyz_pol[:, 1:], axis=0)
+        min_bound_p_z = np.min(xyz_pol[:, 1:], axis=0)
         
-        # max_bound = np.concatenate(([max_bound_r], max_bound_p_z))
-        # min_bound = np.concatenate(([min_bound_r], min_bound_p_z))
+        max_bound = np.concatenate(([max_bound_r], max_bound_p_z))
+        min_bound = np.concatenate(([min_bound_r], min_bound_p_z))
 
-        # # get grid index
-        # crop_range = max_bound - min_bound
+        # get grid index
+        crop_range = max_bound - min_bound
 
         # print('angle: ', max_bound[1], min_bound[1], 'crop_range: ', crop_range)
+        
         x_max = self.point_cloud_range[0]
         x_min = self.point_cloud_range[3]
         y_max = self.point_cloud_range[1]
@@ -186,8 +188,11 @@ class DatasetTemplate(torch_data.Dataset):
         min_bound = np.array([0, -np.pi / 2, self.point_cloud_range[2]])
 
         crop_range = max_bound - min_bound
+        self.cylind_range = crop_range
+
         cur_grid_size = self.grid_size
         intervals = crop_range / (cur_grid_size - 1)
+        # print('crop_range: ',crop_range, ' intervals: ', intervals)
 
         if (intervals == 0).any(): print("Zero interval!")
         cy_grid_ind = (np.floor((np.clip(xyz_pol, min_bound, max_bound) - min_bound) / intervals)).astype(np.int)
@@ -202,21 +207,17 @@ class DatasetTemplate(torch_data.Dataset):
         sector_feats = np.split(sorted_pol_feats, first_indexes[1:])
         voxel_max_num = data_dict['voxels'].shape[1]
         sectors = np.zeros((unique_grid_ind.shape[0], voxel_max_num, 4))
-        num = 0
+
         for i in range(len(sector_feats)):
             if sector_feats[i].shape[0] > 5:
-                num += 1
                 grid_cnts[i] = 5
                 sectors[i, :] = sector_feats[i][np.random.choice(sector_feats[i].shape[0], 5, replace=False)]
             else:
                 sectors[i, :sector_feats[i].shape[0]] = sector_feats[i]
-        # print('num: ', num)
 
         voxel_coords = data_dict['voxel_coords']
         voxels = data_dict['voxels']
-
-        # import pdb
-        # pdb.set_trace()
+        voxel_num_points = data_dict['voxel_num_points']
 
         data_dict['voxel_coords'] = unique_grid_ind[:, [2, 1, 0]]
         data_dict['voxels'] = sectors

@@ -38,7 +38,8 @@ class Detector3DTemplate(nn.Module):
             'num_point_features': self.dataset.point_feature_encoder.num_point_features,
             'grid_size': self.dataset.grid_size,
             'point_cloud_range': self.dataset.point_cloud_range,
-            'voxel_size': self.dataset.voxel_size
+            'voxel_size': self.dataset.voxel_size,
+            'cylind_range': self.dataset.cylind_range if hasattr(self.dataset, 'cylind_range') else None
         }
         for module_name in self.module_topology:
             module, model_info_dict = getattr(self, 'build_%s' % module_name)(
@@ -126,6 +127,7 @@ class Detector3DTemplate(nn.Module):
             class_names=self.class_names,
             grid_size=model_info_dict['grid_size'],
             point_cloud_range=model_info_dict['point_cloud_range'],
+            cylind_range=model_info_dict['cylind_range'],
             predict_boxes_when_training=self.model_cfg.get('ROI_HEAD', False)
         )
         model_info_dict['module_list'].append(dense_head_module)

@@ -27,7 +27,7 @@ def multi_apply(func, *args, **kwargs):
 
 class CenterHead(nn.Module):
     def __init__(self, model_cfg, input_channels, num_class, class_names, grid_size, point_cloud_range,
-                 predict_boxes_when_training=True):
+                 cylind_range=None, predict_boxes_when_training=True):
         super().__init__()
         self.model_cfg = model_cfg
         self.num_class = num_class
@@ -40,6 +40,7 @@ class CenterHead(nn.Module):
         self.target_cfg = target_cfg 
         self.grid_size = grid_size
         self.point_cloud_range = point_cloud_range
+        self.cylind_range = cylind_range
 
         self.forward_ret_dict = {}
 
@@ -266,16 +267,31 @@ class CenterHead(nn.Module):
                     x, y, z = task_boxes[idx][k][0], task_boxes[idx][k][
                         1], task_boxes[idx][k][2]
 
-                    coor_x = (
-                        x - pc_range[0]
-                    ) / voxel_size[0] / self.target_cfg.OUT_SIZE_FACTOR
-                    coor_y = (
-                        y - pc_range[1]
-                    ) / voxel_size[1] / self.target_cfg.OUT_SIZE_FACTOR
+                    if self.model_cfg.get('CYLIND_GRID') != None:
+                        rho = np.sqrt(x ** 2 + y ** 2)
+                        phi = np.arctan2(y, x)
+
+                        cy_range = torch.tensor(self.cylind_range)
+                        cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE)
+                        coor_x = (
+                            rho - cy_range[0]
+                        ) / cylind_size[0] / self.target_cfg.OUT_SIZE_FACTOR
+                        coor_y = (
+                            phi - cy_range[1]
+                        ) / cylind_size[1] / self.target_cfg.OUT_SIZE_FACTOR
+
+                    else:
+                        coor_x = (
+                            x - pc_range[0]
+                        ) / voxel_size[0] / self.target_cfg.OUT_SIZE_FACTOR
+                        coor_y = (
+                            y - pc_range[1]
+                        ) / voxel_size[1] / self.target_cfg.OUT_SIZE_FACTOR
+
 
                     center = torch.tensor([coor_x, coor_y],
-                                          dtype=torch.float32,
-                                          device=device)
+                                        dtype=torch.float32,
+                                        device=device)
                     center_int = center.to(torch.int32)
 
                     # throw out not in range objects to avoid out of array
