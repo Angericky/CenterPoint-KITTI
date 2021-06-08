@@ -68,7 +68,8 @@ class CenterHead(nn.Module):
 
         cls_preds = self.conv_cls(spatial_features_2d)
         box_preds = self.conv_box(spatial_features_2d)
-
+        
+        # pay attention to preds if you use cylinderical partition
         cls_preds = cls_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
         box_preds = box_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
 
@@ -363,8 +364,18 @@ class CenterHead(nn.Module):
         xs = xs.view(batch, -1, 1).float() + batch_reg[:, :, 0:1]
         ys = ys.view(batch, -1, 1).float() + batch_reg[:, :, 1:2]
 
-        xs = xs * self.target_cfg.OUT_SIZE_FACTOR * self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
-        ys = ys * self.target_cfg.OUT_SIZE_FACTOR * self.target_cfg.VOXEL_SIZE[1] + self.point_cloud_range[1]
+        if self.cylind:
+            cy_range = torch.tensor(self.cylind_range)
+            cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE)
+            rho = xs * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cy_range[0]
+            phi = ys * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cy_range[1]
+
+            xs = rho * torch.cos(phi)
+            ys = rho * torch.sin(phi)
+
+        else:
+            xs = xs * self.target_cfg.OUT_SIZE_FACTOR * self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
+            ys = ys * self.target_cfg.OUT_SIZE_FACTOR * self.target_cfg.VOXEL_SIZE[1] + self.point_cloud_range[1]
 
         rot = torch.atan2(batch_rots, batch_rotc)
 
