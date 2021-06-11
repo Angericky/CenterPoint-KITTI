@@ -89,6 +89,7 @@ class CenterHead(nn.Module):
             )
             data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
+            # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(2, 3, -1).permute(0,2,1)
             data_dict['cls_preds_normalized'] = False
 
         return data_dict
@@ -150,7 +151,6 @@ class CenterHead(nn.Module):
             self.get_targets_single, gt_bboxes_3d.to(device='cpu'), gt_labels_3d.to(device='cpu'))
         # transpose heatmaps, because the dimension of tensors in each task is
         # different, we have to use numpy instead of torch to do the transpose.
-
         heatmaps = np.array(heatmaps).transpose(1, 0).tolist()
         heatmaps = [torch.stack(hms_).to(device) for hms_ in heatmaps]
         # transpose anno_boxes
@@ -369,10 +369,8 @@ class CenterHead(nn.Module):
             cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE)
             rho = xs * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cy_range[0]
             phi = ys * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cy_range[1]
-
             xs = rho * torch.cos(phi)
             ys = rho * torch.sin(phi)
-
         else:
             xs = xs * self.target_cfg.OUT_SIZE_FACTOR * self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
             ys = ys * self.target_cfg.OUT_SIZE_FACTOR * self.target_cfg.VOXEL_SIZE[1] + self.point_cloud_range[1]
@@ -380,7 +378,6 @@ class CenterHead(nn.Module):
         rot = torch.atan2(batch_rots, batch_rotc)
 
         batch_box_preds = torch.cat([xs, ys, batch_hei, batch_dim, rot], dim=2)
-
         batch_cls_preds = cls_preds.view(batch, H*W, -1)
         return batch_cls_preds, batch_box_preds
 

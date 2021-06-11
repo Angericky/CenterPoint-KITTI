@@ -39,7 +39,8 @@ class Detector3DTemplate(nn.Module):
             'grid_size': self.dataset.grid_size,
             'point_cloud_range': self.dataset.point_cloud_range,
             'voxel_size': self.dataset.voxel_size,
-            'cylind_range': self.dataset.cylind_range if hasattr(self.dataset, 'cylind_range') else None
+            'cylind_range': self.dataset.cylind_range if hasattr(self.dataset, 'cylind_range') else None,
+            'cylind_size': self.dataset.cylind_size if hasattr(self.dataset, 'cylind_size') else None
         }
         for module_name in self.module_topology:
             module, model_info_dict = getattr(self, 'build_%s' % module_name)(
@@ -168,6 +169,8 @@ class Detector3DTemplate(nn.Module):
                 input_channels=num_point_features,
                 point_cloud_range=model_info_dict['point_cloud_range'],
                 voxel_size=model_info_dict['voxel_size'],
+                cylind_range=model_info_dict['cylind_range'],
+                cylind_size=model_info_dict['cylind_size'],
                 num_class=self.num_class if not self.model_cfg.ROI_HEAD.CLASS_AGNOSTIC else 1,
             )
         else:
@@ -281,7 +284,7 @@ class Detector3DTemplate(nn.Module):
                 recall_dict=recall_dict, batch_index=index, data_dict=batch_dict,
                 thresh_list=post_process_cfg.RECALL_THRESH_LIST
             )
-
+            
             record_dict = {
                 'pred_boxes': final_boxes,
                 'pred_scores': final_scores,
@@ -295,7 +298,7 @@ class Detector3DTemplate(nn.Module):
     def generate_recall_record(box_preds, recall_dict, batch_index, data_dict=None, thresh_list=None):
         if 'gt_boxes' not in data_dict:
             return recall_dict
-
+        
         rois = data_dict['rois'][batch_index] if 'rois' in data_dict else None
         gt_boxes = data_dict['gt_boxes'][batch_index]
 

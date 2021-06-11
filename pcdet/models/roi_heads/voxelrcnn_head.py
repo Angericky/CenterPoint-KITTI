@@ -6,7 +6,7 @@ from ...ops.pointnet2.pointnet2_stack import voxel_pool_modules as voxelpool_sta
 
 
 class VoxelRCNNHead(RoIHeadTemplate):
-    def __init__(self, input_channels, model_cfg, point_cloud_range, voxel_size, num_class=1, **kwargs):
+    def __init__(self, input_channels, model_cfg, point_cloud_range, voxel_size, cylind_range=None, cylind_size=None, num_class=1, **kwargs):
         super().__init__(num_class=num_class, model_cfg=model_cfg)
         self.model_cfg = model_cfg
         self.pool_cfg = model_cfg.ROI_GRID_POOL
@@ -14,6 +14,10 @@ class VoxelRCNNHead(RoIHeadTemplate):
         self.point_cloud_range = point_cloud_range
         self.voxel_size = voxel_size
 
+        self.cylind = True if cylind_range is not None else False
+        self.cylind_range = cylind_range
+        self.cylind_size = cylind_size
+        
         c_out = 0
         self.roi_grid_pool_layers = nn.ModuleList()
         for src_name in self.pool_cfg.FEATURES_SOURCE:
@@ -116,7 +120,9 @@ class VoxelRCNNHead(RoIHeadTemplate):
         Returns:
 
         """
+        # rois are locations under cartesian coords, if you use cylind feats, you should find their cylind grid inds.
         rois = batch_dict['rois']
+
         batch_size = batch_dict['batch_size']
         with_vf_transform = batch_dict.get('with_voxel_feature_transform', False)
         
@@ -125,12 +131,23 @@ class VoxelRCNNHead(RoIHeadTemplate):
         )  # (BxN, 6x6x6, 3)
         # roi_grid_xyz: (B, Nx6x6x6, 3)
         roi_grid_xyz = roi_grid_xyz.view(batch_size, -1, 3)  
+        
+        if self.cylind:
+            rho = torch.sqrt(roi_grid_xyz[:, :, 0:1] ** 2 + roi_grid_xyz[:, :, 1:2] ** 2)
+            phi = torch.atan2(roi_grid_xyz[:, :, 1:2], roi_grid_xyz[:, :, 0:1])
 
-        # compute the voxel coordinates of grid points
-        roi_grid_coords_x = (roi_grid_xyz[:, :, 0:1] - self.point_cloud_range[0]) // self.voxel_size[0]
-        roi_grid_coords_y = (roi_grid_xyz[:, :, 1:2] - self.point_cloud_range[1]) // self.voxel_size[1]
-        roi_grid_coords_z = (roi_grid_xyz[:, :, 2:3] - self.point_cloud_range[2]) // self.voxel_size[2]
-        # roi_grid_coords: (B, Nx6x6x6, 3)
+            cy_range = torch.tensor(self.cylind_range)
+            cylind_size = torch.tensor(self.cylind_size)
+            roi_grid_coords_x = (rho - cy_range[0]) // cylind_size[0]
+            roi_grid_coords_y = (phi - cy_range[1]) // cylind_size[1]
+            roi_grid_coords_z = (roi_grid_xyz[:, :, 2:3] - cy_range[2]) // cylind_size[2]
+
+        else:
+            # compute the voxel coordinates of grid points
+            roi_grid_coords_x = (roi_grid_xyz[:, :, 0:1] - self.point_cloud_range[0]) // self.voxel_size[0]
+            roi_grid_coords_y = (roi_grid_xyz[:, :, 1:2] - self.point_cloud_range[1]) // self.voxel_size[1]
+            roi_grid_coords_z = (roi_grid_xyz[:, :, 2:3] - self.point_cloud_range[2]) // self.voxel_size[2]
+            # roi_grid_coords: (B, Nx6x6x6, 3)
         roi_grid_coords = torch.cat([roi_grid_coords_x, roi_grid_coords_y, roi_grid_coords_z], dim=-1)
 
         batch_idx = rois.new_zeros(batch_size, roi_grid_coords.shape[1], 1)
@@ -219,7 +236,6 @@ class VoxelRCNNHead(RoIHeadTemplate):
         :param input_data: input dict
         :return:
         """
-
         targets_dict = self.proposal_layer(
             batch_dict, nms_config=self.model_cfg.NMS_CONFIG['TRAIN' if self.training else 'TEST']
         )
@@ -250,6 +266,7 @@ class VoxelRCNNHead(RoIHeadTemplate):
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=batch_dict['batch_size'], rois=batch_dict['rois'], cls_preds=rcnn_cls, box_preds=rcnn_reg
             )
+
             batch_dict['batch_cls_preds'] = batch_cls_preds
             batch_dict['batch_box_preds'] = batch_box_preds
             batch_dict['cls_preds_normalized'] = False

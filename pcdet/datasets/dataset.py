@@ -37,6 +37,8 @@ class DatasetTemplate(torch_data.Dataset):
 
         self.point_cloud_range = np.array(self.dataset_cfg.POINT_CLOUD_RANGE, dtype=np.float32)
         self.cylind_range = np.array(self.dataset_cfg.CYLIND_RANGE, dtype=np.float32) if hasattr(self.dataset_cfg, 'CYLIND_RANGE') else None
+        self.cylind_size = np.array(self.dataset_cfg.CYLIND_SIZE, dtype=np.float32) if hasattr(self.dataset_cfg, 'CYLIND_SIZE') else None
+        
         self.point_feature_encoder = PointFeatureEncoder(
             self.dataset_cfg.POINT_FEATURE_ENCODING,
             point_cloud_range=self.point_cloud_range
@@ -170,7 +172,7 @@ class DatasetTemplate(torch_data.Dataset):
 
         xyz_pol = cart2polar(xyz)   # (N, 3)
 
-        pol_feats = np.concatenate((xyz, data_dict['points'][:, 3][:, np.newaxis]), axis=1)
+        pol_feats = np.concatenate((xyz_pol, data_dict['points'][:, 3][:, np.newaxis]), axis=1)
 
         max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
         min_bound_r = np.percentile(xyz_pol[:, 0], 0, axis=0)
