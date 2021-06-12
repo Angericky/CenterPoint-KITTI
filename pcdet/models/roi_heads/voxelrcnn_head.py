@@ -135,19 +135,20 @@ class VoxelRCNNHead(RoIHeadTemplate):
         if self.cylind:
             rho = torch.sqrt(roi_grid_xyz[:, :, 0:1] ** 2 + roi_grid_xyz[:, :, 1:2] ** 2)
             phi = torch.atan2(roi_grid_xyz[:, :, 1:2], roi_grid_xyz[:, :, 0:1])
+            roi_grid_xyz[:, :, 0:1] = rho
+            roi_grid_xyz[:, :, 1:2] = phi
 
             cy_range = torch.tensor(self.cylind_range)
             cylind_size = torch.tensor(self.cylind_size)
             roi_grid_coords_x = (rho - cy_range[0]) // cylind_size[0]
             roi_grid_coords_y = (phi - cy_range[1]) // cylind_size[1]
-            roi_grid_coords_z = (roi_grid_xyz[:, :, 2:3] - cy_range[2]) // cylind_size[2]
-
+            roi_grid_coords_z = (roi_grid_xyz[:, :, 2:3] - cy_range[2]) // cylind_size[2]                                                                                                                                            
         else:
             # compute the voxel coordinates of grid points
             roi_grid_coords_x = (roi_grid_xyz[:, :, 0:1] - self.point_cloud_range[0]) // self.voxel_size[0]
             roi_grid_coords_y = (roi_grid_xyz[:, :, 1:2] - self.point_cloud_range[1]) // self.voxel_size[1]
             roi_grid_coords_z = (roi_grid_xyz[:, :, 2:3] - self.point_cloud_range[2]) // self.voxel_size[2]
-            # roi_grid_coords: (B, Nx6x6x6, 3)
+        # roi_grid_coords: (B, Nx6x6x6, 3)
         roi_grid_coords = torch.cat([roi_grid_coords_x, roi_grid_coords_y, roi_grid_coords_z], dim=-1)
 
         batch_idx = rois.new_zeros(batch_size, roi_grid_coords.shape[1], 1)
@@ -174,8 +175,8 @@ class VoxelRCNNHead(RoIHeadTemplate):
             cur_voxel_xyz = common_utils.get_voxel_centers(
                 cur_coords[:, 1:4],
                 downsample_times=cur_stride,
-                voxel_size=self.voxel_size,
-                point_cloud_range=self.point_cloud_range
+                voxel_size=self.cylind_size if self.cylind else self.voxel_size,
+                point_cloud_range=self.cylind_range if self.cylind else self.point_cloud_range
             )
             cur_voxel_xyz_batch_cnt = cur_voxel_xyz.new_zeros(batch_size).int()
             for bs_idx in range(batch_size):
@@ -186,6 +187,7 @@ class VoxelRCNNHead(RoIHeadTemplate):
             cur_roi_grid_coords = roi_grid_coords // cur_stride
             cur_roi_grid_coords = torch.cat([batch_idx, cur_roi_grid_coords], dim=-1)
             cur_roi_grid_coords = cur_roi_grid_coords.int()
+
             # voxel neighbor aggregation
             pooled_features = pool_layer(
                 xyz=cur_voxel_xyz.contiguous(),
