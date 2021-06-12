@@ -30,6 +30,7 @@ class VoxelRCNNHead(RoIHeadTemplate):
                 radii=LAYER_cfg[src_name].POOL_RADIUS,
                 mlps=mlps,
                 pool_method=LAYER_cfg[src_name].POOL_METHOD,
+                cylind=self.cylind
             )
             
             self.roi_grid_pool_layers.append(pool_layer)

@@ -8,7 +8,7 @@ from typing import List
 class NeighborVoxelSAModuleMSG(nn.Module):
                  
     def __init__(self, *, query_ranges: List[List[int]], radii: List[float], 
-        nsamples: List[int], mlps: List[List[int]], use_xyz: bool = True, pool_method='max_pool'):
+        nsamples: List[int], mlps: List[List[int]], use_xyz: bool = True, pool_method='max_pool', cylind=False):
         """
         Args:
             query_ranges: list of int, list of neighbor ranges to group with
@@ -21,6 +21,7 @@ class NeighborVoxelSAModuleMSG(nn.Module):
 
         assert len(query_ranges) == len(nsamples) == len(mlps)
         
+        self.cylind = cylind
         self.groupers = nn.ModuleList()
         self.mlps_in = nn.ModuleList()
         self.mlps_pos = nn.ModuleList()
@@ -37,10 +38,16 @@ class NeighborVoxelSAModuleMSG(nn.Module):
                 nn.BatchNorm1d(mlp_spec[1])
             )
             
-            cur_mlp_pos = nn.Sequential(
-                nn.Conv2d(3, mlp_spec[1], kernel_size=1, bias=False),
-                nn.BatchNorm2d(mlp_spec[1])
-            )
+            if self.cylind:
+                cur_mlp_pos = nn.Sequential(
+                    nn.Conv2d(5, mlp_spec[1], kernel_size=1, bias=False),
+                    nn.BatchNorm2d(mlp_spec[1])
+                )
+            else:
+                cur_mlp_pos = nn.Sequential(
+                    nn.Conv2d(3, mlp_spec[1], kernel_size=1, bias=False),
+                    nn.BatchNorm2d(mlp_spec[1])
+                )
 
             cur_mlp_out = nn.Sequential(
                 nn.Conv1d(mlp_spec[1], mlp_spec[2], kernel_size=1, bias=False),
@@ -72,7 +79,7 @@ class NeighborVoxelSAModuleMSG(nn.Module):
         """
         :param xyz: (N1 + N2 ..., 3) tensor of the xyz coordinates of the features
         :param xyz_batch_cnt: (batch_size), [N1, N2, ...]
-        :param new_xyz: (M1 + M2 ..., 3)
+        :param new_xyz: (M1 + M2 ..., 3), centers of the ball query
         :param new_xyz_batch_cnt: (batch_size), [M1, M2, ...]
         :param features: (N1 + N2 ..., C) tensor of the descriptors of the the features
         :param point_indices: (B, Z, Y, X) tensor of point indices
@@ -100,11 +107,26 @@ class NeighborVoxelSAModuleMSG(nn.Module):
 
             # grouped_features: (1, C, M1+M2, nsample)
             grouped_features = grouped_features.permute(1, 0, 2).unsqueeze(dim=0)
+
+            if self.cylind:
+                # grouped_xy_o: (M1+M2, 2, nsample)
+                grouped_xy_o = torch.zeros(grouped_xyz[:, 0:2, :].shape, device=grouped_xyz.device)
+                raw_x = grouped_xyz[:, 0:1, :] * torch.cos(grouped_xy_o[:, 1:2, :])
+                raw_y = grouped_xyz[:, 0:1, :] * torch.sin(grouped_xy_o[:, 1:2, :])
+                new_x = new_xyz[:, 0:1] * torch.cos(new_xyz[:, 1:2])
+                new_y = new_xyz[:, 0:1] * torch.sin(new_xyz[:, 1:2])
+                grouped_xy_o[:, 0:1, :] = raw_x - new_x.unsqueeze(-1)
+                grouped_xy_o[:, 1:2, :] = raw_y - new_y.unsqueeze(-1)
+
             # grouped_xyz: (M1+M2, 3, nsample)
             grouped_xyz = grouped_xyz - new_xyz.unsqueeze(-1)
+
+            if self.cylind:
+                grouped_xyz = torch.cat((grouped_xyz, grouped_xy_o), dim=1)
             grouped_xyz[empty_ball_mask] = 0
             # grouped_xyz: (1, 3, M1+M2, nsample)
             grouped_xyz = grouped_xyz.permute(1, 0, 2).unsqueeze(0)
+
             # grouped_xyz: (1, C, M1+M2, nsample)
             position_features = self.mlps_pos[k](grouped_xyz)
             new_features = grouped_features + position_features
