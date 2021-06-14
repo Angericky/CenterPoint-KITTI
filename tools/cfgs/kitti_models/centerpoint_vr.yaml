@@ -4,6 +4,7 @@ DATA_CONFIG:
     _BASE_CONFIG_: tools/cfgs/dataset_configs/kitti_dataset.yaml
     CYLIND_RANGE: [0, -1.57079633, -3, 80.97011927, 1.57079633, 1]
     CYLIND_SIZE: [0.05754806, 0.00196472, 0.1025641]
+    CYLIND_FEATS: True
     DATA_AUGMENTOR:
         DISABLE_AUG_LIST: ['placeholder']
         AUG_CONFIG_LIST:

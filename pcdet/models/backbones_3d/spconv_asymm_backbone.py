@@ -254,7 +254,6 @@ class Asymm_3d_spconv(nn.Module):
 
         sparse_shape = np.array(grid_size)   # shape for (H, W, L)
         # sparse_shape[0] = 11
-        print(sparse_shape)
         self.sparse_shape = grid_size[::-1] + [1, 0, 0]
 
         self.downCntx = ResContextBlock(input_channels, init_size, indice_key="pre")
@@ -265,18 +264,18 @@ class Asymm_3d_spconv(nn.Module):
         # [400, 352, 11] <- [200, 352, 6]
         self.resBlock4 = ResBlock(4 * init_size, 8 * init_size, 0.2, height_pooling=True, padding=(0, 1, 1),
                                   indice_key="down4")
-        self.resBlock5 = ResBlock(8 * init_size, 16 * init_size, 0.2, height_pooling=False,
-                                  indice_key="down5")
+        #self.resBlock5 = ResBlock(8 * init_size, 16 * init_size, 0.2, height_pooling=False,
+        #                          indice_key="down5")
 
-        self.upBlock0 = UpBlock(16 * init_size, 16 * init_size, indice_key="up0", up_key="down5")
-        self.upBlock1 = UpBlock(16 * init_size, 8 * init_size, indice_key="up1", up_key="down4")
-        self.upBlock2 = UpBlock(8 * init_size, 4 * init_size, indice_key="up2", up_key="down3")
-        self.upBlock3 = UpBlock(4 * init_size, 2 * init_size, indice_key="up3", up_key="down2")
+        #self.upBlock0 = UpBlock(16 * init_size, 16 * init_size, indice_key="up0", up_key="down5")
+        #self.upBlock1 = UpBlock(16 * init_size, 8 * init_size, indice_key="up1", up_key="down4")
+        #self.upBlock2 = UpBlock(8 * init_size, 4 * init_size, indice_key="up2", up_key="down3")
+        #self.upBlock3 = UpBlock(4 * init_size, 2 * init_size, indice_key="up3", up_key="down2")
 
-        self.ReconNet = ReconBlock(2 * init_size, 2 * init_size, indice_key="recon")
+        #self.ReconNet = ReconBlock(2 * init_size, 2 * init_size, indice_key="recon")
         
-        self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2, height_pooling=False, kernel_size=(3, 1, 1), padding=0, indice_key="out")
-        self.num_point_features = 128
+        #self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2, height_pooling=False, kernel_size=(3, 1, 1), padding=0, indice_key="out")
+        #self.num_point_features = 128
 
 
     def forward(self, batch_dict):

@@ -38,11 +38,18 @@ class DatasetTemplate(torch_data.Dataset):
         self.point_cloud_range = np.array(self.dataset_cfg.POINT_CLOUD_RANGE, dtype=np.float32)
         self.cylind_range = np.array(self.dataset_cfg.CYLIND_RANGE, dtype=np.float32) if hasattr(self.dataset_cfg, 'CYLIND_RANGE') else None
         self.cylind_size = np.array(self.dataset_cfg.CYLIND_SIZE, dtype=np.float32) if hasattr(self.dataset_cfg, 'CYLIND_SIZE') else None
-        
+        self.cylind_feats = self.dataset_cfg.CYLIND_FEATS if hasattr(self.dataset_cfg, 'CYLIND_FEATS') else False
+        self.cart_feats = self.dataset_cfg.CART_FEATS if hasattr(self.dataset_cfg, 'CART_FEATS') else False
+
         self.point_feature_encoder = PointFeatureEncoder(
             self.dataset_cfg.POINT_FEATURE_ENCODING,
             point_cloud_range=self.point_cloud_range
         )
+
+        self.num_point_features = self.point_feature_encoder.num_point_features
+        if self.cylind_feats and self.cart_feats:
+            self.num_point_features = 6
+            
         self.data_augmentor = DataAugmentor(
             self.root_path, self.dataset_cfg.DATA_AUGMENTOR, self.class_names, logger=self.logger
         ) if self.training else None
@@ -167,13 +174,17 @@ class DatasetTemplate(torch_data.Dataset):
             data_dict=data_dict
         )
 
-        if self.cylind_size:
+        if self.cylind_size is not None:
             # replace 'voxels'(V, max_num, C=4) and 'voxel_coords'(V, C=3) (L, W, H)  in data_dicts
             xyz = data_dict['points'][:, :3]
 
             xyz_pol = cart2polar(xyz)   # (N, 3)
 
-            pol_feats = np.concatenate((xyz, data_dict['points'][:, 3][:, np.newaxis]), axis=1)
+            pol_feats = data_dict['points'][:, 3][:, np.newaxis]
+            if self.cart_feats:
+                pol_feats = np.concatenate((xyz, pol_feats), axis=1)
+            if self.cylind_feats:
+                pol_feats = np.concatenate((xyz_pol[:, :2], pol_feats), axis=1)
 
             max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
             min_bound_r = np.percentile(xyz_pol[:, 0], 0, axis=0)
@@ -218,7 +229,7 @@ class DatasetTemplate(torch_data.Dataset):
             # get a list of all indices of unique elements in a numpy array
             sector_feats = np.split(sorted_pol_feats, first_indexes[1:])
             voxel_max_num = data_dict['voxels'].shape[1]
-            sectors = np.zeros((unique_grid_ind.shape[0], voxel_max_num, 4))
+            sectors = np.zeros((unique_grid_ind.shape[0], voxel_max_num, sector_feats[0].shape[1]))
 
             for i in range(len(sector_feats)):
                 if sector_feats[i].shape[0] > 5:
