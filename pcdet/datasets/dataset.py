@@ -167,72 +167,69 @@ class DatasetTemplate(torch_data.Dataset):
             data_dict=data_dict
         )
 
-        # replace 'voxels'(V, max_num, C=4) and 'voxel_coords'(V, C=3) (L, W, H)  in data_dicts
-        xyz = data_dict['points'][:, :3]
+        if self.cylind_size:
+            # replace 'voxels'(V, max_num, C=4) and 'voxel_coords'(V, C=3) (L, W, H)  in data_dicts
+            xyz = data_dict['points'][:, :3]
 
-        xyz_pol = cart2polar(xyz)   # (N, 3)
+            xyz_pol = cart2polar(xyz)   # (N, 3)
 
-        pol_feats = np.concatenate((xyz_pol, data_dict['points'][:, 3][:, np.newaxis]), axis=1)
+            pol_feats = np.concatenate((xyz, data_dict['points'][:, 3][:, np.newaxis]), axis=1)
 
-        max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
-        min_bound_r = np.percentile(xyz_pol[:, 0], 0, axis=0)
-        max_bound_p_z = np.max(xyz_pol[:, 1:], axis=0)
-        min_bound_p_z = np.min(xyz_pol[:, 1:], axis=0)
-        
-        max_bound = np.concatenate(([max_bound_r], max_bound_p_z))
-        min_bound = np.concatenate(([min_bound_r], min_bound_p_z))
+            max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
+            min_bound_r = np.percentile(xyz_pol[:, 0], 0, axis=0)
+            max_bound_p_z = np.max(xyz_pol[:, 1:], axis=0)
+            min_bound_p_z = np.min(xyz_pol[:, 1:], axis=0)
+            
+            max_bound = np.concatenate(([max_bound_r], max_bound_p_z))
+            min_bound = np.concatenate(([min_bound_r], min_bound_p_z))
 
-        # get grid index
-        crop_range = max_bound - min_bound
+            # get grid index
+            crop_range = max_bound - min_bound
 
-        # print('angle: ', max_bound[1], min_bound[1], 'crop_range: ', crop_range)
-        
-        x_max = self.point_cloud_range[0]
-        x_min = self.point_cloud_range[3]
-        y_max = self.point_cloud_range[1]
-        y_min = self.point_cloud_range[4]
+            # print('angle: ', max_bound[1], min_bound[1], 'crop_range: ', crop_range)
+            
+            x_max = self.point_cloud_range[0]
+            x_min = self.point_cloud_range[3]
+            y_max = self.point_cloud_range[1]
+            y_min = self.point_cloud_range[4]
 
-        distances = np.array([get_distance(x_max, y_max), get_distance(x_max, y_min), get_distance(x_min, y_max), get_distance(x_min, y_min)])
-        max_distance = distances.max()
+            distances = np.array([get_distance(x_max, y_max), get_distance(x_max, y_min), get_distance(x_min, y_max), get_distance(x_min, y_min)])
+            max_distance = distances.max()
 
-        max_bound = np.array([max_distance, np.pi / 2, self.point_cloud_range[-1]])
-        min_bound = np.array([0, -np.pi / 2, self.point_cloud_range[2]])
+            max_bound = np.array([max_distance, np.pi / 2, self.point_cloud_range[-1]])
+            min_bound = np.array([0, -np.pi / 2, self.point_cloud_range[2]])
 
-        crop_range = max_bound - min_bound
-        self.cylind_range = crop_range
+            crop_range = max_bound - min_bound
+            self.cylind_range = crop_range
 
-        cur_grid_size = self.grid_size
-        intervals = crop_range / (cur_grid_size - 1)
-        # print('crop_range: ',crop_range,'max_bound: ', max_bound, 'min_bound: ', min_bound, ' intervals: ', intervals)
+            cur_grid_size = self.grid_size
+            intervals = crop_range / (cur_grid_size - 1)
+            # print('crop_range: ',crop_range,'max_bound: ', max_bound, 'min_bound: ', min_bound, ' intervals: ', intervals)
 
-        if (intervals == 0).any(): print("Zero interval!")
-        cy_grid_ind = (np.floor((np.clip(xyz_pol, min_bound, max_bound) - min_bound) / intervals)).astype(np.int)
-        
-        # sort potential repeated grid_inds first by the 1st col, then 3nd col, then 3rd col. 
-        sorted_indices = np.lexsort((cy_grid_ind[:, 2], cy_grid_ind[:, 1], cy_grid_ind[:, 0]))
-        sorted_pol_feats = pol_feats[sorted_indices]
-        sorted_cy_grid_ind = cy_grid_ind[sorted_indices]
-        unique_grid_ind, first_indexes, grid_cnts = np.unique(sorted_cy_grid_ind, axis=0, return_index=True, return_counts=True)
-        
-        # get a list of all indices of unique elements in a numpy array
-        sector_feats = np.split(sorted_pol_feats, first_indexes[1:])
-        voxel_max_num = data_dict['voxels'].shape[1]
-        sectors = np.zeros((unique_grid_ind.shape[0], voxel_max_num, 4))
+            if (intervals == 0).any(): print("Zero interval!")
+            cy_grid_ind = (np.floor((np.clip(xyz_pol, min_bound, max_bound) - min_bound) / intervals)).astype(np.int)
+            
+            # sort potential repeated grid_inds first by the 1st col, then 3nd col, then 3rd col. 
+            sorted_indices = np.lexsort((cy_grid_ind[:, 2], cy_grid_ind[:, 1], cy_grid_ind[:, 0]))
+            sorted_pol_feats = pol_feats[sorted_indices]
+            sorted_cy_grid_ind = cy_grid_ind[sorted_indices]
+            unique_grid_ind, first_indexes, grid_cnts = np.unique(sorted_cy_grid_ind, axis=0, return_index=True, return_counts=True)
+            
+            # get a list of all indices of unique elements in a numpy array
+            sector_feats = np.split(sorted_pol_feats, first_indexes[1:])
+            voxel_max_num = data_dict['voxels'].shape[1]
+            sectors = np.zeros((unique_grid_ind.shape[0], voxel_max_num, 4))
 
-        for i in range(len(sector_feats)):
-            if sector_feats[i].shape[0] > 5:
-                grid_cnts[i] = 5
-                sectors[i, :] = sector_feats[i][np.random.choice(sector_feats[i].shape[0], 5, replace=False)]
-            else:
-                sectors[i, :sector_feats[i].shape[0]] = sector_feats[i]
+            for i in range(len(sector_feats)):
+                if sector_feats[i].shape[0] > 5:
+                    grid_cnts[i] = 5
+                    sectors[i, :] = sector_feats[i][np.random.choice(sector_feats[i].shape[0], 5, replace=False)]
+                else:
+                    sectors[i, :sector_feats[i].shape[0]] = sector_feats[i]
 
-        voxel_coords = data_dict['voxel_coords']
-        voxels = data_dict['voxels']
-        voxel_num_points = data_dict['voxel_num_points']
-
-        data_dict['voxel_coords'] = unique_grid_ind[:, [2, 1, 0]]
-        data_dict['voxels'] = sectors
-        data_dict['voxel_num_points'] = grid_cnts
+            data_dict['voxel_coords'] = unique_grid_ind[:, [2, 1, 0]]
+            data_dict['voxels'] = sectors
+            data_dict['voxel_num_points'] = grid_cnts
 
         # self.sum_grid_ind = np.unique(np.concatenate((self.sum_grid_ind, unique_grid_ind)), axis=0)
         # input_sp_tensor = spconv.SparseConvTensor(
@@ -275,6 +272,7 @@ class DatasetTemplate(torch_data.Dataset):
         #     data_tuple += (grid_ind, return_fea)
 
         data_dict.pop('gt_names', None)
+
 
         return data_dict
 
