@@ -49,7 +49,7 @@ class DatasetTemplate(torch_data.Dataset):
         self.num_point_features = self.point_feature_encoder.num_point_features
         if self.cylind_feats and self.cart_feats:
             self.num_point_features = 6
-            
+
         self.data_augmentor = DataAugmentor(
             self.root_path, self.dataset_cfg.DATA_AUGMENTOR, self.class_names, logger=self.logger
         ) if self.training else None
@@ -186,39 +186,19 @@ class DatasetTemplate(torch_data.Dataset):
             if self.cylind_feats:
                 pol_feats = np.concatenate((xyz_pol[:, :2], pol_feats), axis=1)
 
-            max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
-            min_bound_r = np.percentile(xyz_pol[:, 0], 0, axis=0)
-            max_bound_p_z = np.max(xyz_pol[:, 1:], axis=0)
-            min_bound_p_z = np.min(xyz_pol[:, 1:], axis=0)
-            
-            max_bound = np.concatenate(([max_bound_r], max_bound_p_z))
-            min_bound = np.concatenate(([min_bound_r], min_bound_p_z))
+            max_bound = np.array(self.cylind_range[3:6])
+            min_bound = np.array(self.cylind_range[0:3])
+            max_bound_1e4 = (max_bound * 1e4).astype(np.int)
+            min_bound_1e4 = (min_bound * 1e4).astype(np.int)
 
-            # get grid index
-            crop_range = max_bound - min_bound
+            crop_range = self.cylind_range[3:6] - self.cylind_range[0:3]
+            grid_size = crop_range / np.array(self.cylind_size)
+            self.grid_size = np.round(grid_size).astype(np.int64)
 
-            # print('angle: ', max_bound[1], min_bound[1], 'crop_range: ', crop_range)
-            
-            x_max = self.point_cloud_range[0]
-            x_min = self.point_cloud_range[3]
-            y_max = self.point_cloud_range[1]
-            y_min = self.point_cloud_range[4]
-
-            distances = np.array([get_distance(x_max, y_max), get_distance(x_max, y_min), get_distance(x_min, y_max), get_distance(x_min, y_min)])
-            max_distance = distances.max()
-
-            max_bound = np.array([max_distance, np.pi / 2, self.point_cloud_range[-1]])
-            min_bound = np.array([0, -np.pi / 2, self.point_cloud_range[2]])
-
-            crop_range = max_bound - min_bound
-            self.cylind_range = crop_range
-
-            cur_grid_size = self.grid_size
-            intervals = crop_range / (cur_grid_size - 1)
-            # print('crop_range: ',crop_range,'max_bound: ', max_bound, 'min_bound: ', min_bound, ' intervals: ', intervals)
+            intervals = (self.cylind_size * 1e4).astype(np.int)
 
             if (intervals == 0).any(): print("Zero interval!")
-            cy_grid_ind = (np.floor((np.clip(xyz_pol, min_bound, max_bound) - min_bound) / intervals)).astype(np.int)
+            cy_grid_ind = (np.floor((np.clip(xyz_pol * 1e4, min_bound_1e4, max_bound_1e4) - min_bound_1e4) / intervals)).astype(np.int)
             
             # sort potential repeated grid_inds first by the 1st col, then 3nd col, then 3rd col. 
             sorted_indices = np.lexsort((cy_grid_ind[:, 2], cy_grid_ind[:, 1], cy_grid_ind[:, 0]))
