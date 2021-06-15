@@ -72,7 +72,7 @@ class VoxelBackBone8x(nn.Module):
         norm_fn = partial(nn.BatchNorm1d, eps=1e-3, momentum=0.01)
         
         if cy_grid_size is not None:
-            self.sparse_shape = cy_grid_size[::-1]
+            self.sparse_shape = cy_grid_size[::-1] + [1, 0, 0]
 
             self.conv_input = spconv.SparseSequential(
                 spconv.SubMConv3d(input_channels, 16, 3, padding=1, bias=False, indice_key='subm1'),
@@ -86,7 +86,7 @@ class VoxelBackBone8x(nn.Module):
             )
 
             self.conv2 = spconv.SparseSequential(
-                # [1624, 1496, 40] <- [810, 748, 20]
+                # [1624, 1496, 41] <- [810, 748, 21]
                 # [1600, 1408, 41] <- [800, 704, 21] 
                 block(16, 32, 3, norm_fn=norm_fn, stride=2, padding=1, indice_key='spconv2', conv_type='spconv'),
                 block(32, 32, 3, norm_fn=norm_fn, padding=1, indice_key='subm2'),
@@ -94,7 +94,7 @@ class VoxelBackBone8x(nn.Module):
             )
 
             self.conv3 = spconv.SparseSequential(
-                # [812, 750, 20] <- [405, 374, 10]
+                # [812, 750, 21] <- [405, 374, 11]
                 # [800, 704, 21] <- [400, 352, 11]
                 block(32, 64, 3, norm_fn=norm_fn, stride=2, padding=1, indice_key='spconv3', conv_type='spconv'),
                 block(64, 64, 3, norm_fn=norm_fn, padding=1, indice_key='subm3'),
@@ -102,9 +102,9 @@ class VoxelBackBone8x(nn.Module):
             )
 
             self.conv4 = spconv.SparseSequential(
-                # [406, 374, 10] <- [203, 187, 5]
+                # [406, 374, 11] <- [203, 187, 5]
                 # [400, 352, 11] <- [200, 176, 5]
-                block(64, 64, 3, norm_fn=norm_fn, stride=2, padding=1, indice_key='spconv4', conv_type='spconv'),
+                block(64, 64, 3, norm_fn=norm_fn, stride=2, padding=(0, 1, 1), indice_key='spconv4', conv_type='spconv'),
                 block(64, 64, 3, norm_fn=norm_fn, padding=1, indice_key='subm4'),
                 block(64, 64, 3, norm_fn=norm_fn, padding=1, indice_key='subm4'),
             )
