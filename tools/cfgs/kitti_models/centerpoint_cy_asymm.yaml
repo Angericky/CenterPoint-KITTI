@@ -2,8 +2,8 @@ CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
 
 DATA_CONFIG: 
     _BASE_CONFIG_: tools/cfgs/dataset_configs/kitti_dataset.yaml
-    CYLIND_RANGE: [0, -1.57079633, -3, 80.97011927, 1.57079633, 1]
-    CYLIND_SIZE: [0.05754806, 0.00196472, 0.1025641]
+    CYLIND_RANGE: [0, -1.575, -3, 81, 1.575, 1]
+    CYLIND_SIZE: [0.05, 0.0021, 0.1]
     CYLIND_FEATS: True
     CART_FEATS: True
 
@@ -39,7 +39,7 @@ MODEL:
         TARGET_ASSIGNER_CONFIG:
             MAX_OBJS: 100
             VOXEL_SIZE: [0.05, 0.05, 0.1]
-            CYLIND_SIZE: [0.05754806, 0.00196472, 0.1025641]
+            CYLIND_SIZE: [0.05, 0.0021, 0.1]
             OUT_SIZE_FACTOR: 4
             GAUSSIAN_OVERLAP: 0.1
             MIN_RADIUS: 2
