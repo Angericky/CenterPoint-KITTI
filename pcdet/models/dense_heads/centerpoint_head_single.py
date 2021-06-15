@@ -31,7 +31,7 @@ def multi_apply(func, *args, **kwargs):
 
 class CenterHead(nn.Module):
     def __init__(self, model_cfg, input_channels, num_class, class_names, grid_size, point_cloud_range,
-                 cylind_range=None, predict_boxes_when_training=True):
+                 cylind_range=None, cy_grid_size=None, predict_boxes_when_training=True):
         super().__init__()
         self.model_cfg = model_cfg
         self.num_class = num_class
@@ -41,10 +41,12 @@ class CenterHead(nn.Module):
         self.cylind = self.model_cfg.get('CYLIND_GRID', False)
 
         target_cfg = self.model_cfg.TARGET_ASSIGNER_CONFIG
-
         self.target_cfg = target_cfg
+
         self.grid_size = grid_size
         self.point_cloud_range = point_cloud_range
+
+        self.cy_grid_size = cy_grid_size
         self.cylind_range = cylind_range
 
         self.forward_ret_dict = {}
@@ -204,10 +206,15 @@ class CenterHead(nn.Module):
         """
 
         max_objs = self.target_cfg.MAX_OBJS
-        grid_size = torch.tensor(self.grid_size)
+        
+        grid_size = torch.tensor(self.cy_grid_size) if self.cy_grid_size is not None else torch.tensor(self.grid_size)
+
         pc_range = torch.tensor(self.point_cloud_range)
         voxel_size = torch.tensor(self.target_cfg.VOXEL_SIZE)
 
+        cy_range = torch.tensor(self.cylind_range)
+        cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE)
+        
         feature_map_size = grid_size[:2] // self.target_cfg.OUT_SIZE_FACTOR
         feature_map_size = feature_map_size.to(device, dtype=torch.int32)
 
@@ -281,8 +288,6 @@ class CenterHead(nn.Module):
                         rho = np.sqrt(x ** 2 + y ** 2)
                         phi = np.arctan2(y, x)
 
-                        cy_range = torch.tensor(self.cylind_range)
-                        cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE)
                         coor_x = (
                             rho - cy_range[0]
                         ) / cylind_size[0] / self.target_cfg.OUT_SIZE_FACTOR

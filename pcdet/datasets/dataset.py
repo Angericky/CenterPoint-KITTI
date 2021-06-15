@@ -40,6 +40,7 @@ class DatasetTemplate(torch_data.Dataset):
         self.cylind_size = np.array(self.dataset_cfg.CYLIND_SIZE, dtype=np.float32) if hasattr(self.dataset_cfg, 'CYLIND_SIZE') else None
         self.cylind_feats = self.dataset_cfg.CYLIND_FEATS if hasattr(self.dataset_cfg, 'CYLIND_FEATS') else False
         self.cart_feats = self.dataset_cfg.CART_FEATS if hasattr(self.dataset_cfg, 'CART_FEATS') else False
+        self.cy_grid_size = np.round((self.cylind_range[3:6] - self.cylind_range[0:3]) / np.array(self.cylind_size)).astype(np.int64) if hasattr(self.dataset_cfg, 'CYLIND_RANGE') else None
 
         self.point_feature_encoder = PointFeatureEncoder(
             self.dataset_cfg.POINT_FEATURE_ENCODING,
@@ -188,8 +189,8 @@ class DatasetTemplate(torch_data.Dataset):
 
             max_bound = np.array(self.cylind_range[3:6])
             min_bound = np.array(self.cylind_range[0:3])
-            max_bound_1e4 = (max_bound * 1e4).astype(np.int)
-            min_bound_1e4 = (min_bound * 1e4).astype(np.int)
+            max_bound_1e4 = np.round(max_bound * 1e4).astype(np.int64)
+            min_bound_1e4 = np.round(min_bound * 1e4).astype(np.int64)
 
             crop_range = self.cylind_range[3:6] - self.cylind_range[0:3]
             grid_size = crop_range / np.array(self.cylind_size)

@@ -40,7 +40,8 @@ class Detector3DTemplate(nn.Module):
             'point_cloud_range': self.dataset.point_cloud_range,
             'voxel_size': self.dataset.voxel_size,
             'cylind_range': self.dataset.cylind_range if hasattr(self.dataset, 'cylind_range') else None,
-            'cylind_size': self.dataset.cylind_size if hasattr(self.dataset, 'cylind_size') else None
+            'cylind_size': self.dataset.cylind_size if hasattr(self.dataset, 'cylind_size') else None,
+            'cy_grid_size': self.dataset.cy_grid_size if hasattr(self.dataset, 'cy_grid_size') else None
         }
         for module_name in self.module_topology:
             module, model_info_dict = getattr(self, 'build_%s' % module_name)(
@@ -72,7 +73,8 @@ class Detector3DTemplate(nn.Module):
             input_channels=model_info_dict['num_point_features'],
             grid_size=model_info_dict['grid_size'],
             voxel_size=model_info_dict['voxel_size'],
-            point_cloud_range=model_info_dict['point_cloud_range']
+            point_cloud_range=model_info_dict['point_cloud_range'],
+            cy_grid_size=model_info_dict['cy_grid_size']
         )
         model_info_dict['module_list'].append(backbone_3d_module)
         model_info_dict['num_point_features'] = backbone_3d_module.num_point_features
@@ -129,6 +131,7 @@ class Detector3DTemplate(nn.Module):
             grid_size=model_info_dict['grid_size'],
             point_cloud_range=model_info_dict['point_cloud_range'],
             cylind_range=model_info_dict['cylind_range'],
+            cy_grid_size=model_info_dict['cy_grid_size'],
             predict_boxes_when_training=self.model_cfg.get('ROI_HEAD', False)
         )
         model_info_dict['module_list'].append(dense_head_module)
