@@ -274,8 +274,8 @@ class Asymm_3d_spconv(nn.Module):
 
         #self.ReconNet = ReconBlock(2 * init_size, 2 * init_size, indice_key="recon")
         
-        #self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2, height_pooling=False, kernel_size=(3, 1, 1), padding=0, indice_key="out")
-        #self.num_point_features = 128
+        self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2, height_pooling=False, kernel_size=(3, 1, 1), padding=0, indice_key="out")
+        self.num_point_features = 128
 
 
     def forward(self, batch_dict):
