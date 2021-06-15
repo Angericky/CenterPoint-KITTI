@@ -249,32 +249,61 @@ class ReconBlock(nn.Module):
 
 
 class Asymm_3d_spconv(nn.Module):
-    def __init__(self, model_cfg, input_channels, grid_size, init_size=16, **kwargs):
+    def __init__(self, model_cfg, input_channels, grid_size, cy_grid_size=None, init_size=16, **kwargs):
         super().__init__()
-
-        sparse_shape = np.array(grid_size)   # shape for (H, W, L)
-        # sparse_shape[0] = 11
-        self.sparse_shape = grid_size[::-1] + [1, 0, 0]
-
-        self.downCntx = ResContextBlock(input_channels, init_size, indice_key="pre")
-        # [1600, 1408, 41] <- [800, 704, 21]
-        self.resBlock2 = ResBlock(init_size, 2 * init_size, 0.2, height_pooling=True, indice_key="down2")
-        # [800, 704, 21] <- [400, 352, 11]
-        self.resBlock3 = ResBlock(2 * init_size, 4 * init_size, 0.2, height_pooling=True, indice_key="down3")
-        # [400, 352, 11] <- [200, 352, 6]
-        self.resBlock4 = ResBlock(4 * init_size, 8 * init_size, 0.2, height_pooling=True, padding=(0, 1, 1),
-                                  indice_key="down4")
-        #self.resBlock5 = ResBlock(8 * init_size, 16 * init_size, 0.2, height_pooling=False,
-        #                          indice_key="down5")
-
-        #self.upBlock0 = UpBlock(16 * init_size, 16 * init_size, indice_key="up0", up_key="down5")
-        #self.upBlock1 = UpBlock(16 * init_size, 8 * init_size, indice_key="up1", up_key="down4")
-        #self.upBlock2 = UpBlock(8 * init_size, 4 * init_size, indice_key="up2", up_key="down3")
-        #self.upBlock3 = UpBlock(4 * init_size, 2 * init_size, indice_key="up3", up_key="down2")
-
-        #self.ReconNet = ReconBlock(2 * init_size, 2 * init_size, indice_key="recon")
         
-        self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2, height_pooling=False, kernel_size=(3, 1, 1), padding=0, indice_key="out")
+        if cy_grid_size is not None:
+            sparse_shape = np.array(grid_size)   # shape for (H, W, L)
+            # sparse_shape[0] = 11
+            self.sparse_shape = cy_grid_size[::-1]
+
+            self.downCntx = ResContextBlock(input_channels, init_size, indice_key="pre")
+            # [1624, 1496, 40] <- [810, 748, 20]
+            # [1600, 1408, 41] <- [800, 704, 21]
+            self.resBlock2 = ResBlock(init_size, 2 * init_size, 0.2, height_pooling=True, indice_key="down2")
+            # [812, 750, 20] <- [405, 374, 10]
+            # [800, 704, 21] <- [400, 352, 11]
+            self.resBlock3 = ResBlock(2 * init_size, 4 * init_size, 0.2, height_pooling=True, indice_key="down3")
+            # [406, 374, 10] <- [203, 187, 5]
+            # [400, 352, 11] <- [200, 352, 5]
+            self.resBlock4 = ResBlock(4 * init_size, 8 * init_size, 0.2, height_pooling=True,
+                                    indice_key="down4")
+            #self.resBlock5 = ResBlock(8 * init_size, 16 * init_size, 0.2, height_pooling=False,
+            #                          indice_key="down5")
+
+            #self.upBlock0 = UpBlock(16 * init_size, 16 * init_size, indice_key="up0", up_key="down5")
+            #self.upBlock1 = UpBlock(16 * init_size, 8 * init_size, indice_key="up1", up_key="down4")
+            #self.upBlock2 = UpBlock(8 * init_size, 4 * init_size, indice_key="up2", up_key="down3")
+            #self.upBlock3 = UpBlock(4 * init_size, 2 * init_size, indice_key="up3", up_key="down2")
+
+            #self.ReconNet = ReconBlock(2 * init_size, 2 * init_size, indice_key="recon")
+            
+            self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2, height_pooling=False, kernel_size=(3, 1, 1), padding=0, indice_key="out")   
+
+        else:
+            sparse_shape = np.array(grid_size)   # shape for (H, W, L)
+            # sparse_shape[0] = 11
+            self.sparse_shape = grid_size[::-1] + [1, 0, 0]
+
+            self.downCntx = ResContextBlock(input_channels, init_size, indice_key="pre")
+            # [1600, 1408, 41] <- [800, 704, 21]
+            self.resBlock2 = ResBlock(init_size, 2 * init_size, 0.2, height_pooling=True, indice_key="down2")
+            # [800, 704, 21] <- [400, 352, 11]
+            self.resBlock3 = ResBlock(2 * init_size, 4 * init_size, 0.2, height_pooling=True, indice_key="down3")
+            # [400, 352, 11] <- [200, 352, 5]
+            self.resBlock4 = ResBlock(4 * init_size, 8 * init_size, 0.2, height_pooling=True, padding=(0, 1, 1),
+                                    indice_key="down4")
+            #self.resBlock5 = ResBlock(8 * init_size, 16 * init_size, 0.2, height_pooling=False,
+            #                          indice_key="down5")
+
+            #self.upBlock0 = UpBlock(16 * init_size, 16 * init_size, indice_key="up0", up_key="down5")
+            #self.upBlock1 = UpBlock(16 * init_size, 8 * init_size, indice_key="up1", up_key="down4")
+            #self.upBlock2 = UpBlock(8 * init_size, 4 * init_size, indice_key="up2", up_key="down3")
+            #self.upBlock3 = UpBlock(4 * init_size, 2 * init_size, indice_key="up3", up_key="down2")
+
+            #self.ReconNet = ReconBlock(2 * init_size, 2 * init_size, indice_key="recon")
+            
+            self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2, height_pooling=False, kernel_size=(3, 1, 1), padding=0, indice_key="out")
         self.num_point_features = 128
 
 
