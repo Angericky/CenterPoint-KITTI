@@ -198,8 +198,12 @@ class DatasetTemplate(torch_data.Dataset):
             intervals = (self.cylind_size * 1e4).astype(np.int)
 
             if (intervals == 0).any(): print("Zero interval!")
-            cy_grid_ind = (np.floor((np.clip(xyz_pol * 1e4, min_bound_1e4, max_bound_1e4) - min_bound_1e4) / intervals)).astype(np.int)
             
+            remove_index = np.concatenate((np.where(xyz_pol * 1e4 < min_bound_1e4 + 1e-20)[0], np.where(xyz_pol * 1e4 > max_bound_1e4 - 1e-20)[0]))
+            xyz_pol = np.delete(xyz_pol, remove_index, axis=0)
+
+            cy_grid_ind = (np.floor((np.clip(xyz_pol.astype(np.float64) * 1e4, min_bound_1e4, max_bound_1e4) - min_bound_1e4) / intervals)).astype(np.int)
+
             # sort potential repeated grid_inds first by the 1st col, then 3nd col, then 3rd col. 
             sorted_indices = np.lexsort((cy_grid_ind[:, 2], cy_grid_ind[:, 1], cy_grid_ind[:, 0]))
             sorted_pol_feats = pol_feats[sorted_indices]
