@@ -301,7 +301,6 @@ class CenterHead(nn.Module):
                     if self.cylind:
                         rho = np.sqrt(x ** 2 + y ** 2)
                         phi = np.arctan2(y, x)
-
                         
                         coor_x = (
                             rho - cy_range[0]
@@ -344,13 +343,20 @@ class CenterHead(nn.Module):
                     box_dim = task_boxes[idx][k][3:6]
                     box_dim = box_dim.log()
 
+                    center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cy_range[1]
+
+                    #print('center_arctan: ', center_arctan)
+                    #print('coor_y: ', coor_y)
+                    #import pdb
+                    #pdb.set_trace()
+
                     if self.cylind:
                         anno_box[new_idx] = torch.cat([
                             center -
                             torch.tensor([x, y], device=device,
                                         dtype=torch.float32),
                             z.unsqueeze(0), box_dim,
-                            rot.unsqueeze(0),
+                            rot.unsqueeze(0) - center_arctan,
                         ])
                     else:
                         anno_box[new_idx] = torch.cat([
@@ -410,9 +416,14 @@ class CenterHead(nn.Module):
                 self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
             ys = ys * self.target_cfg.OUT_SIZE_FACTOR * \
                 self.target_cfg.VOXEL_SIZE[1] + self.point_cloud_range[1]
+        
+
 
         if self.cylind:
-            rot = box_preds[..., 6:7]
+            rot_rel = box_preds[..., 6:7]
+            center_rot = torch.atan2(ys, xs)
+
+            rot = rot_rel - center_rot
         else:
             batch_rots = box_preds[..., 6:7]
             batch_rotc = box_preds[..., 7:8]
@@ -427,7 +438,7 @@ class CenterHead(nn.Module):
         box_loss, tb_dict_box = self.get_box_reg_layer_loss()
         tb_dict.update(tb_dict_box)
         rpn_loss = cls_loss + box_loss
-        print('cls_loss: ', cls_loss.item(), ' box_loss: ', box_loss.item())
+        # print('cls_loss: ', cls_loss.item(), ' box_loss: ', box_loss.item())
         tb_dict['rpn_loss'] = rpn_loss.item()
         return rpn_loss, tb_dict
 
@@ -461,6 +472,8 @@ class CenterHead(nn.Module):
         pred = self.forward_ret_dict['box_preds']  # N x (HxW) x 7
         pred = pred.view(pred.size(0), -1, pred.size(3))
         pred = self._gather_feat(pred, ind)
+        import pdb
+        pdb.set_trace
         mask = masks.unsqueeze(2).expand_as(target_box).float()
         isnotnan = (~torch.isnan(target_box)).float()
         mask *= isnotnan
