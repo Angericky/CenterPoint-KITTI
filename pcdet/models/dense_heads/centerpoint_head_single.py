@@ -9,7 +9,6 @@ from ...utils import box_coder_utils, common_utils, loss_utils
 from functools import partial
 from six.moves import map, zip
 
-
 def multi_apply(func, *args, **kwargs):
     """Apply function to a list of arguments.
     Note:
@@ -50,13 +49,15 @@ class CenterHead(nn.Module):
         self.cylind_range = cylind_range
 
         self.forward_ret_dict = {}
+        
+        self.num_reg_channels = 7 if self.cylind else 8
 
         self.conv_cls = nn.Conv2d(
             input_channels, self.num_class,
             kernel_size=1
         )
         self.conv_box = nn.Conv2d(
-            input_channels, 8,
+            input_channels, self.num_reg_channels,
             kernel_size=1
         )
 
@@ -82,11 +83,10 @@ class CenterHead(nn.Module):
         self.forward_ret_dict['cls_preds'] = cls_preds
         self.forward_ret_dict['box_preds'] = box_preds
 
-        if self.training:
-            targets_dict = self.assign_targets(
-                gt_boxes=data_dict['gt_boxes']
-            )
-            self.forward_ret_dict.update(targets_dict)
+        targets_dict = self.assign_targets(
+            gt_boxes=data_dict['gt_boxes']
+        )
+        self.forward_ret_dict.update(targets_dict)
 
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
@@ -95,7 +95,6 @@ class CenterHead(nn.Module):
             )
             data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
-            # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(2, 3, -1).permute(0,2,1)
             data_dict['cls_preds_normalized'] = False
 
         return data_dict
@@ -159,18 +158,33 @@ class CenterHead(nn.Module):
 
         # transpose heatmaps, because the dimension of tensors in each task is
         # different, we have to use numpy instead of torch to do the transpose.
-        heatmaps = np.array(heatmaps).transpose(1, 0).tolist()
-        heatmaps = [torch.stack(hms_).to(device) for hms_ in heatmaps]
-        # transpose anno_boxes
-        anno_boxes = np.array(anno_boxes).transpose(1, 0).tolist()
-        anno_boxes = [torch.stack(anno_boxes_).to(device)
-                      for anno_boxes_ in anno_boxes]
-        # transpose inds
-        inds = np.array(inds).transpose(1, 0).tolist()
-        inds = [torch.stack(inds_).to(device) for inds_ in inds]
-        # transpose masks
-        masks = np.array(masks).transpose(1, 0).tolist()
-        masks = [torch.stack(masks_).to(device) for masks_ in masks]
+
+        if len(heatmaps) > 1: 
+            heatmaps = np.array(heatmaps).transpose(1, 0).tolist()
+            heatmaps = [torch.stack(hms_).to(device) for hms_ in heatmaps]
+            # transpose anno_boxes
+            anno_boxes = np.array(anno_boxes).transpose(1, 0).tolist()
+            anno_boxes = [torch.stack(anno_boxes_).to(device)
+                        for anno_boxes_ in anno_boxes]
+            # transpose inds
+            inds = np.array(inds).transpose(1, 0).tolist()
+            inds = [torch.stack(inds_).to(device) for inds_ in inds]
+            # transpose masks
+            masks = np.array(masks).transpose(1, 0).tolist()
+            masks = [torch.stack(masks_).to(device) for masks_ in masks]
+        else:
+            heatmaps = [[heatmaps[0][0]]]
+            heatmaps = [torch.stack(hms_).to(device) for hms_ in heatmaps]
+            # transpose anno_boxes
+            anno_boxes = [[anno_boxes[0][0]]]
+            anno_boxes = [torch.stack(anno_boxes_).to(device)
+                        for anno_boxes_ in anno_boxes]
+            # transpose inds
+            inds = [[inds[0][0]]]
+            inds = [torch.stack(inds_).to(device) for inds_ in inds]
+            # transpose masks
+            masks = [[masks[0][0]]]
+            masks = [torch.stack(masks_).to(device) for masks_ in masks]
 
         all_targets_dict = {
             'heatmaps': heatmaps,
@@ -208,12 +222,12 @@ class CenterHead(nn.Module):
         max_objs = self.target_cfg.MAX_OBJS
         
         grid_size = torch.tensor(self.cy_grid_size) if self.cy_grid_size is not None else torch.tensor(self.grid_size)
-
+        
         pc_range = torch.tensor(self.point_cloud_range)
         voxel_size = torch.tensor(self.target_cfg.VOXEL_SIZE)
 
-        cy_range = torch.tensor(self.cylind_range)
-        cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE)
+        cy_range = torch.tensor(self.cylind_range) if self.cylind_range is not None else None
+        cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE) if hasattr(self.target_cfg, 'CYLIND_SIZE') else None
         
         feature_map_size = grid_size[:2] // self.target_cfg.OUT_SIZE_FACTOR
         feature_map_size = feature_map_size.to(device, dtype=torch.int32)
@@ -255,8 +269,8 @@ class CenterHead(nn.Module):
             heatmap = gt_bboxes_3d.new_zeros(
                 (len(self.class_names[idx]), feature_map_size[1],
                  feature_map_size[0]))
-
-            anno_box = gt_bboxes_3d.new_zeros((max_objs, 8),
+            
+            anno_box = gt_bboxes_3d.new_zeros((max_objs, self.num_reg_channels),
                                               dtype=torch.float32)
 
             ind = gt_labels_3d.new_zeros((max_objs), dtype=torch.int64)
@@ -288,6 +302,7 @@ class CenterHead(nn.Module):
                         rho = np.sqrt(x ** 2 + y ** 2)
                         phi = np.arctan2(y, x)
 
+                        
                         coor_x = (
                             rho - cy_range[0]
                         ) / cylind_size[0] / self.target_cfg.OUT_SIZE_FACTOR
@@ -306,7 +321,7 @@ class CenterHead(nn.Module):
                     center = torch.tensor([coor_x, coor_y],
                                           dtype=torch.float32,
                                           device=device)
-                    center_int = center.to(torch.int32)
+                    center_int = center.floor().to(torch.int32)
 
                     # throw out not in range objects to avoid out of array
                     # area when creating the heatmap
@@ -329,15 +344,23 @@ class CenterHead(nn.Module):
                     box_dim = task_boxes[idx][k][3:6]
                     box_dim = box_dim.log()
 
-                    anno_box[new_idx] = torch.cat([
-                        center -
-                        torch.tensor([x, y], device=device,
-                                     dtype=torch.float32),
-                        
-                        z.unsqueeze(0), box_dim,
-                        torch.sin(rot).unsqueeze(0),
-                        torch.cos(rot).unsqueeze(0),
-                    ])
+                    if self.cylind:
+                        anno_box[new_idx] = torch.cat([
+                            center -
+                            torch.tensor([x, y], device=device,
+                                        dtype=torch.float32),
+                            z.unsqueeze(0), box_dim,
+                            rot.unsqueeze(0),
+                        ])
+                    else:
+                        anno_box[new_idx] = torch.cat([
+                            center -
+                            torch.tensor([x, y], device=device,
+                                        dtype=torch.float32),
+                            z.unsqueeze(0), box_dim,
+                            torch.sin(rot).unsqueeze(0),
+                            torch.cos(rot).unsqueeze(0),
+                        ])
 
             heatmaps.append(heatmap)
             anno_boxes.append(anno_box)
@@ -366,9 +389,6 @@ class CenterHead(nn.Module):
 
         batch_dim = torch.exp(box_preds[..., 3:6])
 
-        batch_rots = box_preds[..., 6:7]
-        batch_rotc = box_preds[..., 7:8]
-
         ys, xs = torch.meshgrid([torch.arange(0, H), torch.arange(0, W)])
         ys = ys.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device)
         xs = xs.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device)
@@ -391,7 +411,12 @@ class CenterHead(nn.Module):
             ys = ys * self.target_cfg.OUT_SIZE_FACTOR * \
                 self.target_cfg.VOXEL_SIZE[1] + self.point_cloud_range[1]
 
-        rot = torch.atan2(batch_rots, batch_rotc)
+        if self.cylind:
+            rot = box_preds[..., 6:7]
+        else:
+            batch_rots = box_preds[..., 6:7]
+            batch_rotc = box_preds[..., 7:8]
+            rot = torch.atan2(batch_rots, batch_rotc) 
 
         batch_box_preds = torch.cat([xs, ys, batch_hei, batch_dim, rot], dim=2)
         batch_cls_preds = cls_preds.view(batch, H*W, -1)
@@ -402,7 +427,7 @@ class CenterHead(nn.Module):
         box_loss, tb_dict_box = self.get_box_reg_layer_loss()
         tb_dict.update(tb_dict_box)
         rpn_loss = cls_loss + box_loss
-
+        print('cls_loss: ', cls_loss.item(), ' box_loss: ', box_loss.item())
         tb_dict['rpn_loss'] = rpn_loss.item()
         return rpn_loss, tb_dict
 
@@ -441,7 +466,7 @@ class CenterHead(nn.Module):
         mask *= isnotnan
 
         code_weights = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['code_weights']
-        bbox_weights = mask * mask.new_tensor(code_weights)
+        bbox_weights = mask * mask.new_tensor(code_weights[:pred.shape[2]])
 
         loc_loss = l1_loss(
             pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
@@ -450,13 +475,14 @@ class CenterHead(nn.Module):
             pred[:, :, 0], target_box[:, :, 0], bbox_weights[:, :, 0], avg_factor=(num + 1e-4))
         y_loss = l1_loss(
             pred[:, :, 1], target_box[:, :, 1], bbox_weights[:, :, 1], avg_factor=(num + 1e-4))
-
         yaw_loss = l1_loss(
             pred[:, :, -2:], target_box[:, :, -2:], bbox_weights[:, :, -2:], avg_factor=(num + 1e-4))
+        
         #print('x_loss: ', x_loss.item())
         #print('y_loss: ', y_loss.item())
-        #print('yaw_loss: ', yaw_loss.item())
         #print('loc_loss: ', loc_loss.item())
+        #print('yaw_loss: ', yaw_loss.item())
+
         loc_loss = loc_loss * \
             self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['loc_weight']
         box_loss = loc_loss

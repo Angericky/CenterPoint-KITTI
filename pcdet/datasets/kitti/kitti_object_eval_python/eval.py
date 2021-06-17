@@ -466,6 +466,7 @@ def eval_class(gt_annos,
     Returns:
         dict of recall, precision and aos
     """
+    gt_annos = gt_annos[:len(dt_annos)]
     assert len(gt_annos) == len(dt_annos)
     num_examples = len(gt_annos)
     split_parts = get_split_parts(num_examples, num_parts)

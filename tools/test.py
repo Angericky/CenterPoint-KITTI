@@ -52,7 +52,7 @@ def parse_config():
     return args, cfg
 
 
-def eval_single_ckpt(model, test_loader, args, eval_output_dir, logger, epoch_id, dist_test=False):
+def eval_single_ckpt(model, test_loader, args, eval_output_dir, logger, epoch_id, dist_test=False, unitest=False):
     # load checkpoint
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=dist_test)
     model.cuda()
@@ -60,7 +60,7 @@ def eval_single_ckpt(model, test_loader, args, eval_output_dir, logger, epoch_id
     # start evaluation
     eval_utils.eval_one_epoch(
         cfg, model, test_loader, epoch_id, logger, dist_test=dist_test,
-        result_dir=eval_output_dir, save_to_file=args.save_to_file
+        result_dir=eval_output_dir, save_to_file=args.save_to_file, unitest=unitest
     )
 
 
@@ -82,7 +82,7 @@ def get_no_evaluated_ckpt(ckpt_dir, ckpt_record_file, args):
     return -1, None
 
 
-def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir, dist_test=False):
+def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir, dist_test=False, unitest=False):
     # evaluated ckpt record
     ckpt_record_file = eval_output_dir / ('eval_list_%s.txt' % cfg.DATA_CONFIG.DATA_SPLIT['test'])
     with open(ckpt_record_file, 'a'):
@@ -118,7 +118,7 @@ def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir
         cur_result_dir = eval_output_dir / ('epoch_%s' % cur_epoch_id) / cfg.DATA_CONFIG.DATA_SPLIT['test']
         tb_dict = eval_utils.eval_one_epoch(
             cfg, model, test_loader, cur_epoch_id, logger, dist_test=dist_test,
-            result_dir=cur_result_dir, save_to_file=args.save_to_file
+            result_dir=cur_result_dir, save_to_file=args.save_to_file, unitest=unitest
         )
 
         if cfg.LOCAL_RANK == 0:

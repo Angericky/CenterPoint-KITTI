@@ -42,6 +42,7 @@ def parse_config():
     parser.add_argument('--max_waiting_mins', type=int, default=0, help='max waiting minutes')
     parser.add_argument('--start_epoch', type=int, default=0, help='')
     parser.add_argument('--save_to_file', action='store_true', default=False, help='')
+    parser.add_argument('--unitest', action='store_true', default=False, help='')
 
     args = parser.parse_args()
 
@@ -167,7 +168,8 @@ def main():
         lr_warmup_scheduler=lr_warmup_scheduler,
         ckpt_save_interval=args.ckpt_save_interval,
         max_ckpt_save_num=args.max_ckpt_save_num,
-        merge_all_iters_to_one_epoch=args.merge_all_iters_to_one_epoch
+        merge_all_iters_to_one_epoch=args.merge_all_iters_to_one_epoch,
+        unitest=args.unitest
     )
 
     logger.info('**********************End training %s/%s(%s)**********************\n\n\n'
@@ -188,11 +190,15 @@ def main():
     repeat_eval_ckpt(
         model.module if dist_train else model,
         test_loader, args, eval_output_dir, logger, ckpt_dir,
-        dist_test=dist_train
+        dist_test=dist_train, unitest=args.unitest
     )
     logger.info('**********************End evaluation %s/%s(%s)**********************' %
                 (cfg.EXP_GROUP_PATH, cfg.TAG, args.extra_tag))
 
 
 if __name__ == '__main__':
+    import share_variable as gb
+    gb._init_()
+    gb.set_value('cnt', 0)
+    gb.set_value('sum', 0)
     main()

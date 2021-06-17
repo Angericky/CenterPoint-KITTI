@@ -70,11 +70,11 @@ def boxes_to_corners_3d(boxes3d):
 
 
 def visualize_pts(pts, fig=None, bgcolor=(0, 0, 0), fgcolor=(1.0, 1.0, 1.0),
-                  show_intensity=False, size=(600, 600), draw_origin=True):
+                  show_intensity=True, size=(1000, 1000), draw_origin=True, frame_id=None):
     if not isinstance(pts, np.ndarray):
         pts = pts.cpu().numpy()
     if fig is None:
-        fig = mlab.figure(figure=None, bgcolor=bgcolor, fgcolor=fgcolor, engine=None, size=size)
+        fig = mlab.figure(figure='%06d' % frame_id, bgcolor=bgcolor, fgcolor=fgcolor, engine=None, size=size)
 
     if show_intensity:
         G = mlab.points3d(pts[:, 0], pts[:, 1], pts[:, 2], pts[:, 3], mode='point',
@@ -139,7 +139,7 @@ def draw_multi_grid_range(fig, grid_size=20, bv_range=(-60, -60, 60, 60)):
     return fig
 
 
-def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_scores=None, ref_labels=None):
+def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_scores=None, ref_labels=None, frame_id=None):
     if not isinstance(points, np.ndarray):
         points = points.cpu().numpy()
     if ref_boxes is not None and not isinstance(ref_boxes, np.ndarray):
@@ -151,10 +151,15 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_scores=None, ref_labe
     if ref_labels is not None and not isinstance(ref_labels, np.ndarray):
         ref_labels = ref_labels.cpu().numpy()
 
-    fig = visualize_pts(points)
+    fig = visualize_pts(points, frame_id=frame_id)
     fig = draw_multi_grid_range(fig, bv_range=(0, -40, 80, 40))
+
     if gt_boxes is not None:
+        gt_labels = gt_boxes[:, -1].reshape(-1)
+        gt_boxes = gt_boxes[:, :-1]
         corners3d = boxes_to_corners_3d(gt_boxes)
+        # for i in range(gt_labels.shape[0]):
+        #     print('box: ', gt_labels[i], corners3d[i])
         fig = draw_corners3d(corners3d, fig=fig, color=(0, 0, 1), max_num=100)
 
     if ref_boxes is not None and len(ref_boxes) > 0:
@@ -166,9 +171,9 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_scores=None, ref_labe
                 cur_color = tuple(box_colormap[k % len(box_colormap)])
                 mask = (ref_labels == k)
                 fig = draw_corners3d(ref_corners3d[mask], fig=fig, color=cur_color, cls=ref_scores[mask], max_num=100)
+
     mlab.view(azimuth=-179, elevation=54.0, distance=104.0, roll=90.0)
     return fig
-
 
 def draw_corners3d(corners3d, fig, color=(1, 1, 1), line_width=2, cls=None, tag='', max_num=500, tube_radius=None):
     """
@@ -188,9 +193,9 @@ def draw_corners3d(corners3d, fig, color=(1, 1, 1), line_width=2, cls=None, tag=
 
         if cls is not None:
             if isinstance(cls, np.ndarray):
-                mlab.text3d(b[6, 0], b[6, 1], b[6, 2], '%.2f' % cls[n], scale=(0.3, 0.3, 0.3), color=color, figure=fig)
+                mlab.text3d(b[6, 0], b[6, 1], b[6, 2], '%.2f' % cls[n], scale=(0.6, 0.6, 0.6), color=color, figure=fig)
             else:
-                mlab.text3d(b[6, 0], b[6, 1], b[6, 2], '%s' % cls[n], scale=(0.3, 0.3, 0.3), color=color, figure=fig)
+                mlab.text3d(b[6, 0], b[6, 1], b[6, 2], '%s' % cls[n], scale=(0.6, 0.6, 0.6), color=color, figure=fig)
 
         for k in range(0, 4):
             i, j = k, (k + 1) % 4

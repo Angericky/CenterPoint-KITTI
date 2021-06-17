@@ -70,7 +70,7 @@ class VoxelBackBone8x(nn.Module):
         super().__init__()
         self.model_cfg = model_cfg
         norm_fn = partial(nn.BatchNorm1d, eps=1e-3, momentum=0.01)
-        
+
         if cy_grid_size is not None:
             self.sparse_shape = cy_grid_size[::-1] + [1, 0, 0]
 
@@ -112,14 +112,13 @@ class VoxelBackBone8x(nn.Module):
             last_pad = 0
             last_pad = self.model_cfg.get('last_pad', last_pad)
             self.conv_out = spconv.SparseSequential(
-                # [203, 187, 5] -> [203, 187, 2]
                 # [200, 150, 5] -> [200, 150, 2]
                 spconv.SparseConv3d(64, 128, (3, 1, 1), stride=(2, 1, 1), padding=last_pad,
                                     bias=False, indice_key='spconv_down2'),
                 norm_fn(128),
                 nn.ReLU(),
             )
-
+            
         else:
             self.sparse_shape = grid_size[::-1] + [1, 0, 0]
 
@@ -164,6 +163,7 @@ class VoxelBackBone8x(nn.Module):
                 norm_fn(128),
                 nn.ReLU(),
             )
+
         self.num_point_features = 128
 
     def forward(self, batch_dict):
@@ -179,6 +179,8 @@ class VoxelBackBone8x(nn.Module):
         """
         voxel_features, voxel_coords = batch_dict['voxel_features'], batch_dict['voxel_coords']
         batch_size = batch_dict['batch_size']
+        # [41, 1600, 1408]
+        # [41, 1496, 1624]
         input_sp_tensor = spconv.SparseConvTensor(
             features=voxel_features,
             indices=voxel_coords.int(),
