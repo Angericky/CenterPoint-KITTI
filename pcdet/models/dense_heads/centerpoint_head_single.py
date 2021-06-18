@@ -87,12 +87,24 @@ class CenterHead(nn.Module):
             gt_boxes=data_dict['gt_boxes']
         )
         self.forward_ret_dict.update(targets_dict)
+        
+        #flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1])
+        
+        #batch_size = data_dict['batch_size']
+        #inds = [tuple(i, flat_box_preds[i, targets_dict['inds'][0][i]]) for i in range(batch_size)]
+        #for i in range(batch_size):
+        #    flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
 
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],
                 cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
+                # cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
             )
+            # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
+            # print(data_dict['batch_cls_preds'][0][89219])
+            #import pdb
+            # pdb.set_trace()
             data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
             data_dict['cls_preds_normalized'] = False
@@ -218,7 +230,6 @@ class CenterHead(nn.Module):
             (gt_bboxes_3d.gravity_center, gt_bboxes_3d.tensor[:, 3:]),
             dim=1).to(device)
         """
-
         max_objs = self.target_cfg.MAX_OBJS
         
         grid_size = torch.tensor(self.cy_grid_size) if self.cy_grid_size is not None else torch.tensor(self.grid_size)
@@ -345,18 +356,13 @@ class CenterHead(nn.Module):
 
                     center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cy_range[1]
 
-                    #print('center_arctan: ', center_arctan)
-                    #print('coor_y: ', coor_y)
-                    #import pdb
-                    #pdb.set_trace()
-
                     if self.cylind:
                         anno_box[new_idx] = torch.cat([
                             center -
                             torch.tensor([x, y], device=device,
                                         dtype=torch.float32),
                             z.unsqueeze(0), box_dim,
-                            rot.unsqueeze(0) - center_arctan,
+                            - rot.unsqueeze(0) - np.pi / 2 - center_arctan,
                         ])
                     else:
                         anno_box[new_idx] = torch.cat([
@@ -368,10 +374,12 @@ class CenterHead(nn.Module):
                             torch.cos(rot).unsqueeze(0),
                         ])
 
+
             heatmaps.append(heatmap)
             anno_boxes.append(anno_box)
             masks.append(mask)
             inds.append(ind)
+
         return heatmaps, anno_boxes, inds, masks
 
     def generate_predicted_boxes(self, batch_size, cls_preds, box_preds, dir_cls_preds=None):
@@ -411,26 +419,27 @@ class CenterHead(nn.Module):
                 cylind_size[1] + cy_range[1]
             xs = rho * torch.cos(phi)
             ys = rho * torch.sin(phi)
+            rot_rel = box_preds[..., 6:7]
+
+            center_rot = torch.atan2(ys, xs)
+
+            rot = - np.pi / 2 - rot_rel - center_rot
         else:
             xs = xs * self.target_cfg.OUT_SIZE_FACTOR * \
                 self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
             ys = ys * self.target_cfg.OUT_SIZE_FACTOR * \
                 self.target_cfg.VOXEL_SIZE[1] + self.point_cloud_range[1]
         
-
-
-        if self.cylind:
-            rot_rel = box_preds[..., 6:7]
-            center_rot = torch.atan2(ys, xs)
-
-            rot = rot_rel - center_rot
-        else:
             batch_rots = box_preds[..., 6:7]
             batch_rotc = box_preds[..., 7:8]
             rot = torch.atan2(batch_rots, batch_rotc) 
 
         batch_box_preds = torch.cat([xs, ys, batch_hei, batch_dim, rot], dim=2)
         batch_cls_preds = cls_preds.view(batch, H*W, -1)
+        # 89219
+        # print('box: ', batch_box_preds[0][89219])
+        # import pdb
+        # pdb.set_trace()
         return batch_cls_preds, batch_box_preds
 
     def get_loss(self):
@@ -472,8 +481,6 @@ class CenterHead(nn.Module):
         pred = self.forward_ret_dict['box_preds']  # N x (HxW) x 7
         pred = pred.view(pred.size(0), -1, pred.size(3))
         pred = self._gather_feat(pred, ind)
-        import pdb
-        pdb.set_trace
         mask = masks.unsqueeze(2).expand_as(target_box).float()
         isnotnan = (~torch.isnan(target_box)).float()
         mask *= isnotnan
