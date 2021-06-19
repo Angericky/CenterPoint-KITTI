@@ -235,6 +235,9 @@ class Detector3DTemplate(nn.Module):
                 if not batch_dict['cls_preds_normalized']:
                     cls_preds = [torch.sigmoid(x) for x in cls_preds]
 
+            # print('cls: ', cls_preds[89219])
+            # import pdb
+            # pdb.set_trace()
             if post_process_cfg.NMS_CONFIG.MULTI_CLASSES_NMS:
                 if not isinstance(cls_preds, list):
                     cls_preds = [cls_preds]
@@ -281,12 +284,18 @@ class Detector3DTemplate(nn.Module):
                 final_scores = selected_scores
                 final_labels = label_preds[selected]
                 final_boxes = box_preds[selected]
+                
+                # print('boxes: ', final_boxes[1])
+                # import pdb
+                # pdb.set_trace()
 
             recall_dict = self.generate_recall_record(
                 box_preds=final_boxes if 'rois' not in batch_dict else src_box_preds,
                 recall_dict=recall_dict, batch_index=index, data_dict=batch_dict,
                 thresh_list=post_process_cfg.RECALL_THRESH_LIST
             )
+            #import pdb
+            #pdb.set_trace()
             
             record_dict = {
                 'pred_boxes': final_boxes,

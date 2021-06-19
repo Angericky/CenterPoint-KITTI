@@ -88,26 +88,24 @@ class CenterHead(nn.Module):
         )
         self.forward_ret_dict.update(targets_dict)
         
-        #flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1])
-        
+        #flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
         #batch_size = data_dict['batch_size']
-        #inds = [tuple(i, flat_box_preds[i, targets_dict['inds'][0][i]]) for i in range(batch_size)]
         #for i in range(batch_size):
+        #    targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.0002
         #    flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
 
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],
                 cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
-                # cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
+                #cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
             )
             # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
             # print(data_dict['batch_cls_preds'][0][89219])
-            #import pdb
-            # pdb.set_trace()
             data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
             data_dict['cls_preds_normalized'] = False
+            # data_dict['cls_preds_normalized'] = True
 
         return data_dict
 
@@ -270,9 +268,11 @@ class CenterHead(nn.Module):
             flag2 += len(mask)
         """
 
+        # print('gt_bboxes: ', gt_bboxes_3d[0])
+
         task_boxes = [gt_bboxes_3d]
         task_classes = [gt_labels_3d]
-
+        
         draw_gaussian = draw_heatmap_gaussian
         heatmaps, anno_boxes, inds, masks = [], [], [], []
 
@@ -354,15 +354,14 @@ class CenterHead(nn.Module):
                     box_dim = task_boxes[idx][k][3:6]
                     box_dim = box_dim.log()
 
-                    center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cy_range[1]
-
                     if self.cylind:
+                        center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cy_range[1]
                         anno_box[new_idx] = torch.cat([
                             center -
                             torch.tensor([x, y], device=device,
                                         dtype=torch.float32),
                             z.unsqueeze(0), box_dim,
-                            - rot.unsqueeze(0) - np.pi / 2 - center_arctan,
+                            rot.unsqueeze(0) - center_arctan,
                         ])
                     else:
                         anno_box[new_idx] = torch.cat([
@@ -374,6 +373,11 @@ class CenterHead(nn.Module):
                             torch.cos(rot).unsqueeze(0),
                         ])
 
+                    #if k == 0:
+                    #    print('rot: ', rot)
+                    #    import pdb
+                    #    pdb.set_trace()
+                        #print('rot: ', rot, ' center_arctan: ', center_arctan, ' y: ', y)
 
             heatmaps.append(heatmap)
             anno_boxes.append(anno_box)
@@ -403,27 +407,32 @@ class CenterHead(nn.Module):
 
         batch_dim = torch.exp(box_preds[..., 3:6])
 
-        ys, xs = torch.meshgrid([torch.arange(0, H), torch.arange(0, W)])
-        ys = ys.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device)
-        xs = xs.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device)
+        yc, xc = torch.meshgrid([torch.arange(0, H), torch.arange(0, W)])
+        yc = yc.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device).view(batch, -1, 1).float()
+        xc = xc.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device).view(batch, -1, 1).float()
 
-        xs = xs.view(batch, -1, 1).float() + batch_reg[:, :, 0:1]
-        ys = ys.view(batch, -1, 1).float() + batch_reg[:, :, 1:2]
+        xs = xc.clone() + batch_reg[:, :, 0:1]
+        ys = yc.clone() + batch_reg[:, :, 1:2]
 
         if self.cylind:
             cy_range = torch.tensor(self.cylind_range)
             cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE)
+            
             rho = xs * self.target_cfg.OUT_SIZE_FACTOR * \
                 cylind_size[0] + cy_range[0]
             phi = ys * self.target_cfg.OUT_SIZE_FACTOR * \
                 cylind_size[1] + cy_range[1]
             xs = rho * torch.cos(phi)
             ys = rho * torch.sin(phi)
+
             rot_rel = box_preds[..., 6:7]
+            phi_yc = yc * self.target_cfg.OUT_SIZE_FACTOR * \
+                cylind_size[1] + cy_range[1]
+                
+            # center_int_rot = torch.atan2(yc, xc)
+            # center_rot = torch.atan2(ys, xs)
 
-            center_rot = torch.atan2(ys, xs)
-
-            rot = - np.pi / 2 - rot_rel - center_rot
+            rot = rot_rel + phi_yc
         else:
             xs = xs * self.target_cfg.OUT_SIZE_FACTOR * \
                 self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
@@ -437,7 +446,7 @@ class CenterHead(nn.Module):
         batch_box_preds = torch.cat([xs, ys, batch_hei, batch_dim, rot], dim=2)
         batch_cls_preds = cls_preds.view(batch, H*W, -1)
         # 89219
-        # print('box: ', batch_box_preds[0][89219])
+        # print('box: ', batch_box_preds[0][89219], ' phi: ', phi[0][89219])
         # import pdb
         # pdb.set_trace()
         return batch_cls_preds, batch_box_preds
@@ -498,10 +507,10 @@ class CenterHead(nn.Module):
         yaw_loss = l1_loss(
             pred[:, :, -2:], target_box[:, :, -2:], bbox_weights[:, :, -2:], avg_factor=(num + 1e-4))
         
-        #print('x_loss: ', x_loss.item())
-        #print('y_loss: ', y_loss.item())
-        #print('loc_loss: ', loc_loss.item())
-        #print('yaw_loss: ', yaw_loss.item())
+        # print('x_loss: ', x_loss.item())
+        # print('y_loss: ', y_loss.item())
+        # print('loc_loss: ', loc_loss.item())
+        # print('yaw_loss: ', yaw_loss.item())
 
         loc_loss = loc_loss * \
             self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['loc_weight']

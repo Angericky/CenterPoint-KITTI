@@ -503,6 +503,7 @@ def eval_class(gt_annos,
                         compute_fp=False)
                     tp, fp, fn, similarity, thresholds = rets
                     thresholdss += thresholds.tolist()
+                # print('tp: ', tp, ' fp: ', fp, ' fn: ', fn)
                 thresholdss = np.array(thresholdss)
                 thresholds = get_thresholds(thresholdss, total_num_valid_gt)
                 thresholds = np.array(thresholds)
@@ -535,9 +536,14 @@ def eval_class(gt_annos,
                         thresholds=thresholds,
                         compute_aos=compute_aos)
                     idx += num_part
+                # pr[:, 0], tp
+                # pr[:, 1], fp
+                # pr[:, 2], fn
                 for i in range(len(thresholds)):
                     recall[m, l, k, i] = pr[i, 0] / (pr[i, 0] + pr[i, 2])
                     precision[m, l, k, i] = pr[i, 0] / (pr[i, 0] + pr[i, 1])
+                    #if metric == 2:
+                    #    print('tp: ', pr[i, 0], ' fp: ', pr[i, 1])
                     if compute_aos:
                         aos[m, l, k, i] = pr[i, 3] / (pr[i, 0] + pr[i, 1])
                 for i in range(len(thresholds)):
@@ -546,6 +552,9 @@ def eval_class(gt_annos,
                     recall[m, l, k, i] = np.max(recall[m, l, k, i:], axis=-1)
                     if compute_aos:
                         aos[m, l, k, i] = np.max(aos[m, l, k, i:], axis=-1)
+    if metric == 2:
+        import pdb
+        pdb.set_trace()
     ret_dict = {
         "recall": recall,
         "precision": precision,
@@ -556,9 +565,20 @@ def eval_class(gt_annos,
 
 def get_mAP(prec):
     sums = 0
+    # split_num = 11
     for i in range(0, prec.shape[-1], 4):
         sums = sums + prec[..., i]
     return sums / 11 * 100
+    # sums = np.zeros((3, 3, 2))
+    # num = np.zeros(3)
+    # split_num = 11
+    #for i in range(0, prec.shape[-1], 4):
+    #    for j in range(3):
+    #        sums[j] = sums[j] + prec[j, ..., i]
+    #        num[j] = num[j] + np.where(prec[j, ..., i] !=0)[0].shape[0] // 6
+    #for i in range(3):
+    #    sums[i] = sums[i] / num[i] * 100
+    #return sums
 
 
 def get_mAP_R40(prec):

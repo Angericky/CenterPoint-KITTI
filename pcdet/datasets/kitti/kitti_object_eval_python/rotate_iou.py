@@ -174,7 +174,8 @@ def point_in_quadrilateral(pt_x, pt_y, corners):
     adad = ad0 * ad0 + ad1 * ad1
     adap = ad0 * ap0 + ad1 * ap1
 
-    return abab >= abap and abap >= 0 and adad >= adap and adap >= 0
+    eps = 1e-6
+    return abab >= abap-eps and abap >= 0-eps and adad >= adap-eps and adap >= 0-eps
 
 
 @cuda.jit('(float32[:], float32[:], float32[:])', device=True, inline=True)

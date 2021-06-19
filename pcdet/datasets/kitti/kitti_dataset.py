@@ -165,7 +165,7 @@ class KittiDataset(DatasetTemplate):
                 loc_lidar[:, 2] += h[:, 0] / 2
                 gt_boxes_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots[..., np.newaxis])], axis=1)
                 annotations['gt_boxes_lidar'] = gt_boxes_lidar
-
+                
                 info['annos'] = annotations
 
                 if count_inside_pts:
@@ -278,7 +278,8 @@ class KittiDataset(DatasetTemplate):
 
             calib = batch_dict['calib'][batch_index]
             image_shape = batch_dict['image_shape'][batch_index]
-            pred_boxes_camera = box_utils.boxes3d_lidar_to_kitti_camera(pred_boxes.copy(), calib)
+            # print('pred: ', pred_boxes[1])
+            pred_boxes_camera = box_utils.boxes3d_lidar_to_kitti_camera(pred_boxes, calib)
             pred_boxes_img = box_utils.boxes3d_kitti_camera_to_imageboxes(
                 pred_boxes_camera, calib, image_shape=image_shape
             )
@@ -294,12 +295,15 @@ class KittiDataset(DatasetTemplate):
             pred_dict['score'] = pred_scores
             pred_dict['boxes_lidar'] = pred_boxes
 
+            #print('pred_boxes: ', pred_boxes[1])
+            #import pdb
+            # pdb.set_trace()
             return pred_dict
 
         annos = []
         for index, box_dict in enumerate(pred_dicts):
             frame_id = batch_dict['frame_id'][index]
-
+            
             single_pred_dict = generate_single_sample_dict(index, box_dict)
             single_pred_dict['frame_id'] = frame_id
             annos.append(single_pred_dict)

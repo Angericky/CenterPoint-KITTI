@@ -62,6 +62,7 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
             batch_dict, pred_dicts, class_names,
             output_path=final_output_dir if save_to_file else None
         )
+
         det_annos += annos
         if cfg.LOCAL_RANK == 0:
             progress_bar.set_postfix(disp_dict)
