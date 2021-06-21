@@ -50,7 +50,8 @@ class CenterHead(nn.Module):
 
         self.forward_ret_dict = {}
         
-        self.num_reg_channels = 7 if self.cylind else 8
+        #self.num_reg_channels = 7 if self.cylind else 8
+        self.num_reg_channels = 8
 
         self.conv_cls = nn.Conv2d(
             input_channels, self.num_class,
@@ -356,12 +357,14 @@ class CenterHead(nn.Module):
 
                     if self.cylind:
                         center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cy_range[1]
+                        rot_rel = rot.unsqueeze(0) - center_arctan
                         anno_box[new_idx] = torch.cat([
                             center -
                             torch.tensor([x, y], device=device,
                                         dtype=torch.float32),
                             z.unsqueeze(0), box_dim,
-                            rot.unsqueeze(0) - center_arctan,
+                            torch.sin(rot_rel),
+                            torch.cos(rot_rel),
                         ])
                     else:
                         anno_box[new_idx] = torch.cat([
@@ -425,14 +428,18 @@ class CenterHead(nn.Module):
             xs = rho * torch.cos(phi)
             ys = rho * torch.sin(phi)
 
-            rot_rel = box_preds[..., 6:7]
+            #rot_rel = box_preds[..., 6:7]
             phi_yc = yc * self.target_cfg.OUT_SIZE_FACTOR * \
                 cylind_size[1] + cy_range[1]
                 
             # center_int_rot = torch.atan2(yc, xc)
             # center_rot = torch.atan2(ys, xs)
 
-            rot = rot_rel + phi_yc
+            #rot = rot_rel + phi_yc
+            batch_rots = box_preds[..., 6:7]
+            batch_rotc = box_preds[..., 7:8]
+            rot = torch.atan2(batch_rots, batch_rotc) + phi_yc
+
         else:
             xs = xs * self.target_cfg.OUT_SIZE_FACTOR * \
                 self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
@@ -510,7 +517,7 @@ class CenterHead(nn.Module):
             pred[:, :, 3:6], target_box[:, :, 3:6], bbox_weights[:, :, 3:6], avg_factor=(num + 1e-4)
         )
         yaw_loss = l1_loss(
-            pred[:, :, 6:7], target_box[:, :, 6:7], bbox_weights[:, :, 6:7], avg_factor=(num + 1e-4))
+            pred[:, :, 6:], target_box[:, :, 6:], bbox_weights[:, :, 6:], avg_factor=(num + 1e-4))
         
         #print('x_loss: ', x_loss.item())
         #print('y_loss: ', y_loss.item())
