@@ -504,19 +504,25 @@ class CenterHead(nn.Module):
             pred[:, :, 0], target_box[:, :, 0], bbox_weights[:, :, 0], avg_factor=(num + 1e-4))
         y_loss = l1_loss(
             pred[:, :, 1], target_box[:, :, 1], bbox_weights[:, :, 1], avg_factor=(num + 1e-4))
+        dim_loss = l1_loss(
+            pred[:, :, 3:6], target_box[:, :, 3:6], bbox_weights[:, :, 3:6], avg_factor=(num + 1e-4)
+        )
         yaw_loss = l1_loss(
-            pred[:, :, -2:], target_box[:, :, -2:], bbox_weights[:, :, -2:], avg_factor=(num + 1e-4))
+            pred[:, :, 6:7], target_box[:, :, 6:7], bbox_weights[:, :, 6:7], avg_factor=(num + 1e-4))
         
-        # print('x_loss: ', x_loss.item())
-        # print('y_loss: ', y_loss.item())
-        # print('loc_loss: ', loc_loss.item())
-        # print('yaw_loss: ', yaw_loss.item())
+        #print('x_loss: ', x_loss.item())
+        #print('y_loss: ', y_loss.item())
+        #print('dim_loss: ', dim_loss.item())
+        #print('loc_loss: ', loc_loss.item())
+        #print('yaw_loss: ', yaw_loss.item())
 
         loc_loss = loc_loss * \
             self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['loc_weight']
         box_loss = loc_loss
         tb_dict = {
-            'rpn_loss_loc': loc_loss.item()
+            'rpn_loss_loc': loc_loss.item(),
+            'rpn_loss_yaw': yaw_loss.item(),
+            'rpn_loss_dim': dim_loss.item()
         }
 
         return box_loss, tb_dict
