@@ -511,8 +511,12 @@ class CenterHead(nn.Module):
         loc_loss = l1_loss(
             pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
         
-        xyz_loss = l1_loss(
-            pred[:, :, 0:3], target_box[:, :, 0:3], bbox_weights[:, :, 0:3], avg_factor=(num + 1e-4))
+        xy_loss = l1_loss(
+            pred[:, :, 0:2], target_box[:, :, 0:2], bbox_weights[:, :, 0:2], avg_factor=(num + 1e-4)
+        )
+        z_loss = l1_loss(
+            pred[:, :, 2:3], target_box[:, :, 2:3], bbox_weights[:, :, 2:3], avg_factor=(num + 1e-4)
+        )
         dim_loss = l1_loss(
             pred[:, :, 3:6], target_box[:, :, 3:6], bbox_weights[:, :, 3:6], avg_factor=(num + 1e-4)
         )
@@ -532,7 +536,8 @@ class CenterHead(nn.Module):
             'rpn_loss_loc': loc_loss.item(),
             'rpn_loss_yaw': yaw_loss.item(),
             'rpn_loss_dim': dim_loss.item(),
-            'rpn_loss_xyz': xyz_loss.item()
+            'rpn_loss_xy': xy_loss.item(),
+            'rpn_loss_z': z_loss.item()
         }
 
         return box_loss, tb_dict
