@@ -552,9 +552,9 @@ def eval_class(gt_annos,
                     recall[m, l, k, i] = np.max(recall[m, l, k, i:], axis=-1)
                     if compute_aos:
                         aos[m, l, k, i] = np.max(aos[m, l, k, i:], axis=-1)
-    if metric == 2:
-        import pdb
-        pdb.set_trace()
+    # if metric == 2:
+    #     import pdb
+    #     pdb.set_trace()
     ret_dict = {
         "recall": recall,
         "precision": precision,
