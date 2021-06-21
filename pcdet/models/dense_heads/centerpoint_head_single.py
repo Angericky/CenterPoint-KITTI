@@ -93,7 +93,7 @@ class CenterHead(nn.Module):
         #for i in range(batch_size):
         #    targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.0002
         #    flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
-
+        
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],
@@ -446,9 +446,13 @@ class CenterHead(nn.Module):
         batch_box_preds = torch.cat([xs, ys, batch_hei, batch_dim, rot], dim=2)
         batch_cls_preds = cls_preds.view(batch, H*W, -1)
         # 89219
-        # print('box: ', batch_box_preds[0][89219], ' phi: ', phi[0][89219])
-        # import pdb
-        # pdb.set_trace()
+        #                   xs,       ys,      batch_hei, batch_dim,               rot
+        # box_preds:        [0.5785,  0.2246, -0.7503,  1.3974,  0.4941,  0.4284,  2.8610]
+        # batch_box_preds:  [58.8903, 16.3419, -0.7503,  4.0448,  1.6391,  1.5348,  3.1298]
+        # anno_boxes:       [0.3442,  0.6907, -0.8411,  1.3056,  0.6259,  0.5128, -3.4096]
+        #print('box: ', batch_box_preds[0][89219], ' phi: ', phi[0][89219])
+        #import pdb
+        #pdb.set_trace()
         return batch_cls_preds, batch_box_preds
 
     def get_loss(self):
@@ -500,10 +504,8 @@ class CenterHead(nn.Module):
         loc_loss = l1_loss(
             pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
         
-        x_loss = l1_loss(
-            pred[:, :, 0], target_box[:, :, 0], bbox_weights[:, :, 0], avg_factor=(num + 1e-4))
-        y_loss = l1_loss(
-            pred[:, :, 1], target_box[:, :, 1], bbox_weights[:, :, 1], avg_factor=(num + 1e-4))
+        xyz_loss = l1_loss(
+            pred[:, :, 0:3], target_box[:, :, 0:3], bbox_weights[:, :, 0:3], avg_factor=(num + 1e-4))
         dim_loss = l1_loss(
             pred[:, :, 3:6], target_box[:, :, 3:6], bbox_weights[:, :, 3:6], avg_factor=(num + 1e-4)
         )
@@ -522,7 +524,8 @@ class CenterHead(nn.Module):
         tb_dict = {
             'rpn_loss_loc': loc_loss.item(),
             'rpn_loss_yaw': yaw_loss.item(),
-            'rpn_loss_dim': dim_loss.item()
+            'rpn_loss_dim': dim_loss.item(),
+            'rpn_loss_xyz': xyz_loss.item()
         }
 
         return box_loss, tb_dict

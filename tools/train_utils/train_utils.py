@@ -1,4 +1,5 @@
 import glob
+from itertools import accumulate
 import os
 
 import torch
@@ -56,7 +57,7 @@ def train_one_epoch(model, optimizer, train_loader, model_func, lr_scheduler, ac
                 for key, val in tb_dict.items():
                     tb_log.add_scalar('train/' + key, val, accumulated_iter)
         
-        if unitest and cur_it > 8:
+        if unitest and cur_it > 10:
             break
             
         
