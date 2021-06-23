@@ -353,7 +353,7 @@ class CenterHead(nn.Module):
                     mask[new_idx] = 1
                     rot = task_boxes[idx][k][6]
 
-                    box_dim = task_boxes[idx][k][3:6]
+                    box_dim = (task_boxes[idx][k][3:6] + 1)
                     box_dim = box_dim.log()
                 
                     if self.cylind:
@@ -416,12 +416,12 @@ class CenterHead(nn.Module):
         batch_reg = box_preds[..., 0:2]
         batch_hei = box_preds[..., 2:3]
 
-        batch_dim = torch.exp(box_preds[..., 3:6])
+        batch_dim = torch.exp(box_preds[..., 3:6]) - 1
 
         yc, xc = torch.meshgrid([torch.arange(0, H), torch.arange(0, W)])
         yc = yc.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device).view(batch, -1, 1).float()
         xc = xc.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device).view(batch, -1, 1).float()
-
+ 
         xs = xc.clone() + batch_reg[:, :, 0:1]
         ys = yc.clone() 
 
