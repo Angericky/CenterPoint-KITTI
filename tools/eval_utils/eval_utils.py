@@ -67,7 +67,7 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
         if cfg.LOCAL_RANK == 0:
             progress_bar.set_postfix(disp_dict)
             progress_bar.update()
-        if unitest and i > 10:
+        if unitest and i > 8:
             break
 
     if cfg.LOCAL_RANK == 0:

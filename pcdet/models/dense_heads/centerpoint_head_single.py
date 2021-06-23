@@ -1,4 +1,5 @@
 import functools
+import pdb
 import torch.nn.functional as F
 import torch
 import torch
@@ -354,18 +355,25 @@ class CenterHead(nn.Module):
 
                     box_dim = task_boxes[idx][k][3:6]
                     box_dim = box_dim.log()
-
+                
                     if self.cylind:
                         center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cy_range[1]
+                        arc = phi - center_arctan
+                        r = x * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cy_range[0]
+                        # same as arc
+                        # offset_arc = (center[1] - y) * (cylind_size[1] * self.target_cfg.OUT_SIZE_FACTOR)
+
                         rot_rel = rot.unsqueeze(0) - center_arctan
                         anno_box[new_idx] = torch.cat([
-                            center -
-                            torch.tensor([x, y], device=device,
+                            center[0: 1] -
+                            torch.tensor([x], device=device,
                                         dtype=torch.float32),
+                            arc * r.unsqueeze(0),
                             z.unsqueeze(0), box_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
                         ])
+
                     else:
                         anno_box[new_idx] = torch.cat([
                             center -
@@ -415,18 +423,22 @@ class CenterHead(nn.Module):
         xc = xc.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device).view(batch, -1, 1).float()
 
         xs = xc.clone() + batch_reg[:, :, 0:1]
-        ys = yc.clone() + batch_reg[:, :, 1:2]
+        ys = yc.clone() 
 
         if self.cylind:
             cy_range = torch.tensor(self.cylind_range)
             cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE)
-            
+
             rho = xs * self.target_cfg.OUT_SIZE_FACTOR * \
                 cylind_size[0] + cy_range[0]
             phi = ys * self.target_cfg.OUT_SIZE_FACTOR * \
                 cylind_size[1] + cy_range[1]
-            xs = rho * torch.cos(phi)
-            ys = rho * torch.sin(phi)
+
+            arc_offset = batch_reg[:, :, 1:2] / rho 
+            phi_offset = phi + arc_offset
+
+            xs = rho * torch.cos(phi_offset)
+            ys = rho * torch.sin(phi_offset)
 
             #rot_rel = box_preds[..., 6:7]
             phi_yc = yc * self.target_cfg.OUT_SIZE_FACTOR * \

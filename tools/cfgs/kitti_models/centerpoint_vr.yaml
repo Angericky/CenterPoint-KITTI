@@ -2,7 +2,7 @@ CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
 
 DATA_CONFIG:
     _BASE_CONFIG_: tools/cfgs/dataset_configs/kitti_dataset.yaml
-    CYLIND_RANGE: [0, -1.575, -3, 81, 1.575, 1]
+    CYLIND_RANGE: [0, -1.5708, -3, 81.2, 1.5708, 1]
     CYLIND_SIZE: [0.05, 0.0021, 0.1]
     CYLIND_FEATS: True
     DATA_AUGMENTOR:
