@@ -48,7 +48,7 @@ MODEL:
             LOSS_WEIGHTS: {
                 'cls_weight': 0.5,
                 'loc_weight': 0.5,
-                'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+                'code_weights': [1.0, 1.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0]
             }
 
     POST_PROCESSING:

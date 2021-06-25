@@ -169,17 +169,14 @@ class CenterHead(nn.Module):
             self.get_targets_single, gt_bboxes_3d.to(device='cpu'), gt_labels_3d.to(device='cpu'))
 
         # transpose heatmaps, because the dimension of tensors in each task is
-        # different, we have to use numpy instead of torch to do the transpose.
+        # diifferent, we have to use numpy instead of torch to do the transpose.
         # import cv2
-        # import pdb
-        # pdb.set_trace()
         # heatmap=np.array(heatmaps[0][0][0].cpu()) * 255
         # heatmap=heatmap.astype(np.uint8)
         # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
         # cv2.imshow('heatmap',heatmap)
         # cv2.waitKey(0)
         
-
         if len(heatmaps) > 1: 
             heatmaps = np.array(heatmaps).transpose(1, 0).tolist()
             heatmaps = [torch.stack(hms_).to(device) for hms_ in heatmaps]
@@ -353,8 +350,9 @@ class CenterHead(nn.Module):
                     new_idx = k
                     x, y = center_int[0], center_int[1]
                     
-                    center_l = (y + 1) * cylind_size[1] / (x * cylind_size[0])
-                    y_factor = cylind_size[0] / center_l
+                    rho_center = x * cylind_size[0] * self.target_cfg.OUT_SIZE_FACTOR + cy_range[0]
+                    center_l = cylind_size[1] * rho_center
+                    y_factor = cylind_size[0]  / center_l
 
                     draw_gaussian(heatmap[cls_id], center_int, radius, y_factor=y_factor)
 
@@ -629,7 +627,13 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
         import pdb
         pdb.set_trace()
     y_diameter = 2 * y_radius + 1
-    gaussian = gaussian_2d((diameter, y_diameter), sigma=diameter / 6).transpose(1, 0)
+    gaussian_center = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
+
+    index = np.linspace(0, diameter - 1, diameter, endpoint=True)
+    y_index = diameter / y_diameter * np.linspace(0, y_diameter, y_diameter, endpoint=True)
+    gaussian = np.zeros((y_diameter, diameter))
+    for i in range(gaussian_center.shape[0]):
+        gaussian[:, i] = np.interp(y_index, index, gaussian_center[i])
 
     x, y = int(center[0]), int(center[1])
     
@@ -645,6 +649,17 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
                                                    torch.float32)
     if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
         torch.max(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
+    # if radius != y_radius:
+    #     print('radius: ', radius, ' y_radius: ', y_radius)
+    #     print('y_factor: ', y_factor, ' y: ', y)
+    #     import pdb
+    #     pdb.set_trace()
+    #     import cv2
+    #     heatmap2=np.array(heatmap.cpu()) * 255
+    #     heatmap2=heatmap2.astype(np.uint8)
+    #     heatmap2=cv2.applyColorMap(heatmap2, cv2.COLORMAP_HOT)
+    #     cv2.imshow('heatmap',heatmap2)
+    #     cv2.waitKey(0)
     return heatmap
 
 
