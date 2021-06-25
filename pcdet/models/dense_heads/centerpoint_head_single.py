@@ -90,11 +90,11 @@ class CenterHead(nn.Module):
         )
         self.forward_ret_dict.update(targets_dict)
         
-        #flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
-        #batch_size = data_dict['batch_size']
-        #for i in range(batch_size):
-        #    targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.0002
-        #    flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
+        # flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
+        # batch_size = data_dict['batch_size']
+        # for i in range(batch_size):
+        #     targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.0002
+        #     flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
         
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
@@ -102,12 +102,12 @@ class CenterHead(nn.Module):
                 cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
                 #cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
             )
-            # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
+            #data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
             # print(data_dict['batch_cls_preds'][0][89219])
             data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
             data_dict['cls_preds_normalized'] = False
-            # data_dict['cls_preds_normalized'] = True
+            #data_dict['cls_preds_normalized'] = True
 
         return data_dict
 
@@ -170,6 +170,15 @@ class CenterHead(nn.Module):
 
         # transpose heatmaps, because the dimension of tensors in each task is
         # different, we have to use numpy instead of torch to do the transpose.
+        # import cv2
+        # import pdb
+        # pdb.set_trace()
+        # heatmap=np.array(heatmaps[0][0][0].cpu()) * 255
+        # heatmap=heatmap.astype(np.uint8)
+        # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+        # cv2.imshow('heatmap',heatmap)
+        # cv2.waitKey(0)
+        
 
         if len(heatmaps) > 1: 
             heatmaps = np.array(heatmaps).transpose(1, 0).tolist()
@@ -301,11 +310,11 @@ class CenterHead(nn.Module):
                     self.target_cfg.OUT_SIZE_FACTOR
 
                 if width > 0 and length > 0:
-                    radius = gaussian_radius(
-                        (length, width),
-                        min_overlap=self.target_cfg.GAUSSIAN_OVERLAP)
+                    radius = gaussian_radius((length, width), min_overlap=self.target_cfg.GAUSSIAN_OVERLAP)
                     radius = max(self.target_cfg.MIN_RADIUS, int(radius))
-
+                    # if self.target_cfg.MIN_RADIUS < int(radius):
+                    #     import pdb
+                    #     pdb.set_trace()
                     # be really careful for the coordinate system of
                     # your box annotation.
                     x, y, z = task_boxes[idx][k][0], task_boxes[idx][k][
@@ -340,11 +349,14 @@ class CenterHead(nn.Module):
                     if not (0 <= center_int[0] < feature_map_size[0]
                             and 0 <= center_int[1] < feature_map_size[1]):
                         continue
-
-                    draw_gaussian(heatmap[cls_id], center_int, radius)
-
+                    
                     new_idx = k
                     x, y = center_int[0], center_int[1]
+                    
+                    center_l = (y + 1) * cylind_size[1] / (x * cylind_size[0])
+                    y_factor = cylind_size[0] / center_l
+
+                    draw_gaussian(heatmap[cls_id], center_int, radius, y_factor=y_factor)
 
                     assert (y * feature_map_size[0] + x <
                             feature_map_size[0] * feature_map_size[1])
@@ -353,7 +365,7 @@ class CenterHead(nn.Module):
                     mask[new_idx] = 1
                     rot = task_boxes[idx][k][6]
 
-                    box_dim = (task_boxes[idx][k][3:6] + 1)
+                    box_dim = task_boxes[idx][k][3:6]
                     box_dim = box_dim.log()
                 
                     if self.cylind:
@@ -369,6 +381,9 @@ class CenterHead(nn.Module):
                             torch.tensor([x], device=device,
                                         dtype=torch.float32),
                             arc * r.unsqueeze(0),
+                            #center[1: 2] -
+                            #torch.tensor([y], device=device,
+                            #            dtype=torch.float32),
                             z.unsqueeze(0), box_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
@@ -416,14 +431,14 @@ class CenterHead(nn.Module):
         batch_reg = box_preds[..., 0:2]
         batch_hei = box_preds[..., 2:3]
 
-        batch_dim = torch.exp(box_preds[..., 3:6]) - 1
+        batch_dim = torch.exp(box_preds[..., 3:6])
 
         yc, xc = torch.meshgrid([torch.arange(0, H), torch.arange(0, W)])
         yc = yc.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device).view(batch, -1, 1).float()
         xc = xc.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device).view(batch, -1, 1).float()
- 
+
         xs = xc.clone() + batch_reg[:, :, 0:1]
-        ys = yc.clone() 
+        ys = yc.clone()
 
         if self.cylind:
             cy_range = torch.tensor(self.cylind_range)
@@ -436,7 +451,7 @@ class CenterHead(nn.Module):
 
             arc_offset = batch_reg[:, :, 1:2] / rho 
             phi_offset = phi + arc_offset
-
+            
             xs = rho * torch.cos(phi_offset)
             ys = rho * torch.sin(phi_offset)
 
@@ -453,6 +468,7 @@ class CenterHead(nn.Module):
             rot = torch.atan2(batch_rots, batch_rotc) + phi_yc
 
         else:
+            ys = ys  + batch_reg[:, :, 1:2]
             xs = xs * self.target_cfg.OUT_SIZE_FACTOR * \
                 self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
             ys = ys * self.target_cfg.OUT_SIZE_FACTOR * \
@@ -594,11 +610,11 @@ def gaussian_2d(shape, sigma=1):
     return h
 
 
-def draw_heatmap_gaussian(heatmap, center, radius, k=1):
+def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
     """Get gaussian masked heatmap.
 
     Args:
-        heatmap (torch.Tensor): Heatmap to be masked.
+        heatmap (torch.Tensor): Heatmap to be masked. shape (phi, rho)
         center (torch.Tensor): Center coord of the heatmap.
         radius (int): Radius of gausian.
         K (int): Multiple of masked_gaussian. Defaults to 1.
@@ -607,18 +623,24 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1):
         torch.Tensor: Masked heatmap.
     """
     diameter = 2 * radius + 1
-    gaussian = gaussian_2d((diameter, diameter), sigma=diameter / 6)
+    try:
+        y_radius = int(((radius * y_factor).floor().item()))
+    except:
+        import pdb
+        pdb.set_trace()
+    y_diameter = 2 * y_radius + 1
+    gaussian = gaussian_2d((diameter, y_diameter), sigma=diameter / 6).transpose(1, 0)
 
     x, y = int(center[0]), int(center[1])
-
+    
     height, width = heatmap.shape[0:2]
 
     left, right = min(x, radius), min(width - x, radius + 1)
-    top, bottom = min(y, radius), min(height - y, radius + 1)
+    top, bottom = min(y, y_radius), min(height - y, y_radius + 1)
 
     masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
     masked_gaussian = torch.from_numpy(
-        gaussian[radius - top:radius + bottom,
+        gaussian[y_radius - top:y_radius + bottom,
                  radius - left:radius + right]).to(heatmap.device,
                                                    torch.float32)
     if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
