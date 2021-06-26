@@ -90,11 +90,11 @@ class CenterHead(nn.Module):
         )
         self.forward_ret_dict.update(targets_dict)
         
-        # flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
-        # batch_size = data_dict['batch_size']
-        # for i in range(batch_size):
-        #     targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.0002
-        #     flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
+        #flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
+        #batch_size = data_dict['batch_size']
+        #for i in range(batch_size):
+        #    targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.0002
+        #    flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
         
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
@@ -169,7 +169,7 @@ class CenterHead(nn.Module):
             self.get_targets_single, gt_bboxes_3d.to(device='cpu'), gt_labels_3d.to(device='cpu'))
 
         # transpose heatmaps, because the dimension of tensors in each task is
-        # diifferent, we have to use numpy instead of torch to do the transpose.
+        # different, we have to use numpy instead of torch to do the transpose.
         # import cv2
         # heatmap=np.array(heatmaps[0][0][0].cpu()) * 255
         # heatmap=heatmap.astype(np.uint8)
@@ -634,6 +634,8 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
     gaussian = np.zeros((y_diameter, diameter))
     for i in range(gaussian_center.shape[0]):
         gaussian[:, i] = np.interp(y_index, index, gaussian_center[i])
+
+    # gaussian = gaussian_2d((diameter, y_diameter), sigma=diameter / 6).transpose(1, 0)
 
     x, y = int(center[0]), int(center[1])
     
