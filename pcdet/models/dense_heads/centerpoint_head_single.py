@@ -168,15 +168,6 @@ class CenterHead(nn.Module):
         heatmaps, anno_boxes, inds, masks = multi_apply(
             self.get_targets_single, gt_bboxes_3d.to(device='cpu'), gt_labels_3d.to(device='cpu'))
 
-        # transpose heatmaps, because the dimension of tensors in each task is
-        # different, we have to use numpy instead of torch to do the transpose.
-        # import cv2
-        # heatmap=np.array(heatmaps[0][0][0].cpu()) * 255
-        # heatmap=heatmap.astype(np.uint8)
-        # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
-        # cv2.imshow('heatmap',heatmap)
-        # cv2.waitKey(0)
-        
         if len(heatmaps) > 1: 
             heatmaps = np.array(heatmaps).transpose(1, 0).tolist()
             heatmaps = [torch.stack(hms_).to(device) for hms_ in heatmaps]
@@ -203,6 +194,31 @@ class CenterHead(nn.Module):
             # transpose masks
             masks = [[masks[0][0]]]
             masks = [torch.stack(masks_).to(device) for masks_ in masks]
+
+        # import pdb
+        # pdb.set_trace() 
+        # num_pos = heatmaps[0].eq(1).float().sum().item()
+        # print('num_pos: ', num_pos)
+
+        # transpose heatmaps, because the dimension of tensors in each task is
+        # different, we have to use numpy instead of torch to do the transpose.
+        # import cv2
+        # batch_size = heatmaps[0].shape[0]
+        # for i in range(batch_size):
+        #     heatmap = heatmaps[0][i]
+        #     num_pos = heatmap.eq(1).float().sum().item()
+        #     print('num_pos_%d: '%i, num_pos)
+
+        #     heatmap=np.array(heatmap.cpu()) * 255
+        #     heatmap=heatmap.astype(np.uint8).transpose(1, 2, 0)
+
+        #     # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+        #     cv2.imshow('heatmap_%d' % i,heatmap)
+
+        # cv2.waitKey(0)
+
+        # import pdb
+        # pdb.set_trace()
 
         all_targets_dict = {
             'heatmaps': heatmaps,
@@ -494,6 +510,7 @@ class CenterHead(nn.Module):
         tb_dict.update(tb_dict_box)
         rpn_loss = cls_loss + box_loss
         # print('cls_loss: ', cls_loss.item(), ' box_loss: ', box_loss.item())
+
         tb_dict['rpn_loss'] = rpn_loss.item()
         return rpn_loss, tb_dict
 
@@ -505,6 +522,15 @@ class CenterHead(nn.Module):
         gt_heatmaps = self.forward_ret_dict['heatmaps'][0].to(device)
         num_pos = gt_heatmaps.eq(1).float().sum().item()
 
+        # import pdb
+        # pdb.set_trace()
+        # import cv2
+        # heatmap=np.array(heatmaps[0][0][0].cpu()) * 255
+        # heatmap=heatmap.astype(np.uint8)
+        # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+        # cv2.imshow('heatmap',heatmap)
+        # cv2.waitKey(0)
+
         cls_loss = self.loss_cls(
             pred_heatmaps,
             gt_heatmaps,
@@ -515,6 +541,10 @@ class CenterHead(nn.Module):
         tb_dict = {
             'rpn_loss_cls': cls_loss.item()
         }
+
+        # print('cls_loss:', cls_loss)
+        # import pdb
+        # pdb.set_trace()
         return cls_loss, tb_dict
 
     def get_box_reg_layer_loss(self):
@@ -630,10 +660,12 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
     gaussian_center = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
 
     index = np.linspace(0, diameter - 1, diameter, endpoint=True)
-    y_index = diameter / y_diameter * np.linspace(0, y_diameter, y_diameter, endpoint=True)
+    y_index = radius  / (y_radius + 1) * np.linspace(0, y_radius + 1, y_radius + 1, endpoint=True)
     gaussian = np.zeros((y_diameter, diameter))
+
     for i in range(gaussian_center.shape[0]):
-        gaussian[:, i] = np.interp(y_index, index, gaussian_center[i])
+        gaussian_half = np.interp(y_index, index, gaussian_center[i])
+        gaussian[:, i] = np.concatenate((gaussian_half, gaussian_half[:-1][::-1]), axis=0)
 
     # gaussian = gaussian_2d((diameter, y_diameter), sigma=diameter / 6).transpose(1, 0)
 
@@ -649,6 +681,22 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
         gaussian[y_radius - top:y_radius + bottom,
                  radius - left:radius + right]).to(heatmap.device,
                                                    torch.float32)
+
+    # gaussian = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
+
+    # x, y = int(center[0]), int(center[1])
+    
+    # height, width = heatmap.shape[0:2]
+
+    # left, right = min(x, radius), min(width - x, radius + 1)
+    # top, bottom = min(y, radius), min(height - y, radius + 1)
+
+    # masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
+    # masked_gaussian = torch.from_numpy(
+    #     gaussian[radius - top:radius + bottom,
+    #              radius - left:radius + right]).to(heatmap.device,
+    #                                                torch.float32)
+    
     if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
         torch.max(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
     # if radius != y_radius:
