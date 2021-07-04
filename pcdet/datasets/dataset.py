@@ -41,6 +41,8 @@ class DatasetTemplate(torch_data.Dataset):
         self.cylind_feats = self.dataset_cfg.CYLIND_FEATS if hasattr(self.dataset_cfg, 'CYLIND_FEATS') else False
         self.cart_feats = self.dataset_cfg.CART_FEATS if hasattr(self.dataset_cfg, 'CART_FEATS') else False
         self.cy_grid_size = np.round((self.cylind_range[3:6] - self.cylind_range[0:3]) / np.array(self.cylind_size)).astype(np.int64) if hasattr(self.dataset_cfg, 'CYLIND_RANGE') else None
+        
+        self.voxel_centers = self.dataset_cfg.VOXEL_CENTERS if hasattr(self.dataset_cfg, 'VOXEL_CENTERS') else False
 
         self.point_feature_encoder = PointFeatureEncoder(
             self.dataset_cfg.POINT_FEATURE_ENCODING,
@@ -49,7 +51,9 @@ class DatasetTemplate(torch_data.Dataset):
 
         self.num_point_features = self.point_feature_encoder.num_point_features
         if self.cylind_feats and self.cart_feats:
-            self.num_point_features = 6
+            self.num_point_features = 5
+        if self.voxel_centers:
+            self.num_point_features += 3
 
         self.data_augmentor = DataAugmentor(
             self.root_path, self.dataset_cfg.DATA_AUGMENTOR, self.class_names, logger=self.logger
@@ -181,11 +185,13 @@ class DatasetTemplate(torch_data.Dataset):
 
             xyz_pol = cart2polar(xyz)   # (N, 3)
 
-            pol_feats = data_dict['points'][:, 3][:, np.newaxis]
-            if self.cart_feats:
-                pol_feats = np.concatenate((xyz, pol_feats), axis=1)
-            if self.cylind_feats:
-                pol_feats = np.concatenate((xyz_pol[:, :2], pol_feats), axis=1)
+            z_feats = data_dict['points'][:, 3][:, np.newaxis]
+            if self.cart_feats and self.cylind_feats:
+                pol_feats = np.concatenate((xyz_pol[:, :2], xyz[:, :2], z_feats), axis=1)
+            elif self.cart_feats:
+                pol_feats = np.concatenate((xyz[:, :2], z_feats), axis=1)
+            elif self.cylind_feats:
+                pol_feats = np.concatenate((xyz_pol[:, :2], z_feats), axis=1)
 
             max_bound = np.array(self.cylind_range[3:6])
             min_bound = np.array(self.cylind_range[0:3])
@@ -196,14 +202,16 @@ class DatasetTemplate(torch_data.Dataset):
             grid_size = crop_range / np.array(self.cylind_size)
             self.grid_size = np.round(grid_size).astype(np.int64)
 
-            intervals = (self.cylind_size * 1e4).astype(np.int)
+            intervals = self.cylind_size
+            intervals_1e4 = (self.cylind_size * 1e4).astype(np.int)
 
-            if (intervals == 0).any(): print("Zero interval!")
+            if (intervals_1e4 == 0).any(): print("Zero interval!")
             
             remove_index = np.concatenate((np.where(xyz_pol * 1e4 < min_bound_1e4 + 1e-20)[0], np.where(xyz_pol * 1e4 > max_bound_1e4 - 1e-20)[0]))
             xyz_pol = np.delete(xyz_pol, remove_index, axis=0)
+            pol_feats = np.delete(pol_feats, remove_index, axis=0)
 
-            cy_grid_ind = (np.floor((np.clip(xyz_pol.astype(np.float64) * 1e4, min_bound_1e4, max_bound_1e4) - min_bound_1e4) / intervals)).astype(np.int)
+            cy_grid_ind = (np.floor((np.clip(xyz_pol.astype(np.float64) * 1e4, min_bound_1e4, max_bound_1e4) - min_bound_1e4) / intervals_1e4)).astype(np.int)
 
             # sort potential repeated grid_inds first by the 1st col, then 3nd col, then 3rd col. 
             sorted_indices = np.lexsort((cy_grid_ind[:, 2], cy_grid_ind[:, 1], cy_grid_ind[:, 0]))
@@ -211,9 +219,13 @@ class DatasetTemplate(torch_data.Dataset):
             sorted_cy_grid_ind = cy_grid_ind[sorted_indices]
             unique_grid_ind, first_indexes, grid_cnts = np.unique(sorted_cy_grid_ind, axis=0, return_index=True, return_counts=True)
             
+            if self.voxel_centers:
+                voxel_centers = (unique_grid_ind.astype(np.float32) + 0.5) * intervals  + min_bound
+                data_dict['voxel_centers'] = voxel_centers
+
             # get a list of all indices of unique elements in a numpy array
             sector_feats = np.split(sorted_pol_feats, first_indexes[1:])
-            voxel_max_num = data_dict['voxels'].shape[1]
+            voxel_max_num = 5 #data_dict['voxels'].shape[1]
             sectors = np.zeros((unique_grid_ind.shape[0], voxel_max_num, sector_feats[0].shape[1]))
 
             for i in range(len(sector_feats)):
@@ -223,9 +235,14 @@ class DatasetTemplate(torch_data.Dataset):
                 else:
                     sectors[i, :sector_feats[i].shape[0]] = sector_feats[i]
 
+            #import pdb
+            #pdb.set_trace()
+            #import torch
+            #print(torch.nonzero(voxel_centers[:,0] - sectors[:,0,0] > 0.05))
             data_dict['voxel_coords'] = unique_grid_ind[:, [2, 1, 0]]
             data_dict['voxels'] = sectors
             data_dict['voxel_num_points'] = grid_cnts
+
 
         # self.sum_grid_ind = np.unique(np.concatenate((self.sum_grid_ind, unique_grid_ind)), axis=0)
         # input_sp_tensor = spconv.SparseConvTensor(
@@ -269,7 +286,6 @@ class DatasetTemplate(torch_data.Dataset):
 
         data_dict.pop('gt_names', None)
 
-
         return data_dict
 
     @staticmethod
@@ -283,7 +299,7 @@ class DatasetTemplate(torch_data.Dataset):
 
         for key, val in data_dict.items():
             try:
-                if key in ['voxels', 'voxel_num_points']:
+                if key in ['voxels', 'voxel_num_points', 'voxel_centers']:
                     ret[key] = np.concatenate(val, axis=0)
                 elif key in ['points', 'voxel_coords']:
                     coors = []

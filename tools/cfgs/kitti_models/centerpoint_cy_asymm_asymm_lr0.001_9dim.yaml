@@ -5,6 +5,8 @@ DATA_CONFIG:
     CYLIND_RANGE: [0, -1.5708, -3, 81.2, 1.5708, 1]
     CYLIND_SIZE: [0.05, 0.0021, 0.1]
     CYLIND_FEATS: True
+    CART_FEATS: True
+    VOXEL_CENTERS: True
 
 MODEL:
     NAME: CenterPoint
@@ -48,7 +50,7 @@ MODEL:
             LOSS_WEIGHTS: {
                 'cls_weight': 0.5,
                 'loc_weight': 1,
-                'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+                'code_weights': [1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
             }
 
     POST_PROCESSING:
@@ -71,7 +73,7 @@ OPTIMIZATION:
     NUM_EPOCHS: 80
 
     OPTIMIZER: adam_onecycle
-    LR: 0.003
+    LR: 0.001
     WEIGHT_DECAY: 0.01
     MOMENTUM: 0.9
 

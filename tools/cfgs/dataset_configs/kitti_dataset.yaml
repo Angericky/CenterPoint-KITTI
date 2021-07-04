@@ -60,13 +60,13 @@ DATA_PROCESSOR:
         'test': False
       }
 
-    - NAME: transform_points_to_voxels
-      VOXEL_SIZE: [0.05, 0.05, 0.1]
-      OUTPUT_SHAPE: [1408, 1600, 40]
-      MAX_POINTS_PER_VOXEL: 5
-      MAX_NUMBER_OF_VOXELS: {
-        'train': 16000,
-        'test': 40000
-      }
+    # - NAME: transform_points_to_voxels
+    #   VOXEL_SIZE: [0.05, 0.05, 0.1]
+    #   OUTPUT_SHAPE: [1408, 1600, 40]
+    #   MAX_POINTS_PER_VOXEL: 5
+    #   MAX_NUMBER_OF_VOXELS: {
+    #     'train': 16000,
+    #     'test': 40000
+    #   }
 
     #- NAME: convert_to_cylinder_coords

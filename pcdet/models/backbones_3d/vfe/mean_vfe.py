@@ -26,6 +26,9 @@ class MeanVFE(VFETemplate):
         points_mean = voxel_features[:, :, :].sum(dim=1, keepdim=False)
         normalizer = torch.clamp_min(voxel_num_points.view(-1, 1), min=1.0).type_as(voxel_features)
         points_mean = points_mean / normalizer
-        batch_dict['voxel_features'] = points_mean.contiguous()
+        voxel_features = points_mean.contiguous()
+        if batch_dict.get('voxel_centers', None) is not None:
+            voxel_features = torch.cat((voxel_features, batch_dict['voxel_centers']), dim=1)
 
+        batch_dict['voxel_features'] = voxel_features
         return batch_dict

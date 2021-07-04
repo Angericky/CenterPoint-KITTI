@@ -365,12 +365,15 @@ class CenterHead(nn.Module):
                     
                     new_idx = k
                     x, y = center_int[0], center_int[1]
-                    
-                    rho_center = x * cylind_size[0] * self.target_cfg.OUT_SIZE_FACTOR + cy_range[0]
-                    center_l = cylind_size[1] * rho_center
-                    y_factor = cylind_size[0]  / center_l
 
-                    draw_gaussian(heatmap[cls_id], center_int, radius, y_factor=y_factor)
+                    if self.cylind: 
+                        rho_center = x * cylind_size[0] * self.target_cfg.OUT_SIZE_FACTOR + cy_range[0]
+                        center_l = cylind_size[1] * rho_center
+                        y_factor = cylind_size[0]  / center_l
+
+                        draw_gaussian(heatmap[cls_id], center_int, radius, y_factor=y_factor)
+                    else:
+                        draw_gaussian(heatmap[cls_id], center_int, radius)
 
                     assert (y * feature_map_size[0] + x <
                             feature_map_size[0] * feature_map_size[1])
@@ -654,8 +657,7 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
     try:
         y_radius = int(((radius * y_factor).floor().item()))
     except:
-        import pdb
-        pdb.set_trace()
+        y_radius = radius
     y_diameter = 2 * y_radius + 1
     gaussian_center = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
 
