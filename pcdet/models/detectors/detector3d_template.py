@@ -211,6 +211,9 @@ class Detector3DTemplate(nn.Module):
         post_process_cfg = self.model_cfg.POST_PROCESSING
         batch_size = batch_dict['batch_size']
         recall_dict = {}
+        recall_dict_list = []
+        for i in range(3):
+            recall_dict_list.append({})
         pred_dicts = []
         for index in range(batch_size):
             if batch_dict.get('batch_index', None) is not None:
@@ -291,14 +294,26 @@ class Detector3DTemplate(nn.Module):
                 # import pdb
                 # pdb.set_trace()
 
-            recall_dict = self.generate_recall_record(
-                box_preds=final_boxes if 'rois' not in batch_dict else src_box_preds,
-                recall_dict=recall_dict, batch_index=index, data_dict=batch_dict,
-                thresh_list=post_process_cfg.RECALL_THRESH_LIST
-            )
-            #import pdb
-            #pdb.set_trace()
+            range_box = torch.sqrt(final_boxes[:, 0] ** 2 + final_boxes[:, 1] ** 2)
             
+            range_box_1 = final_boxes[range_box <= 81.2 / 3]
+            range_box_2 = final_boxes[(range_box <= 81.2 / 3 * 2) & (range_box > 81.2 / 3)]
+            range_box_3 = final_boxes[range_box > 81.2 / 3 * 2]
+
+            range_boxes = [range_box_1, range_box_2, range_box_3]
+
+            for i, range_box in enumerate(range_boxes):
+                gt_boxes_all = batch_dict['gt_boxes'][index]
+                range_gt_box = torch.sqrt(gt_boxes_all[:, 0] ** 2 + gt_boxes_all[:, 1] ** 2)
+                gt_boxes = gt_boxes_all[(range_gt_box <= 81.2 / 3 * (i+1)) & (range_gt_box > 81.2 / 3 * i)]
+
+                recall_dict_list[i] = self.generate_recall_record(
+                    box_preds=range_box if 'rois' not in batch_dict else src_box_preds,
+                    recall_dict=recall_dict, batch_index=index, data_dict=batch_dict,
+                    gt_boxes=gt_boxes,
+                    thresh_list=post_process_cfg.RECALL_THRESH_LIST
+                )
+                
             record_dict = {
                 'pred_boxes': final_boxes,
                 'pred_scores': final_scores,
@@ -306,21 +321,34 @@ class Detector3DTemplate(nn.Module):
             }
             pred_dicts.append(record_dict)
 
-        return pred_dicts, recall_dict
+        return pred_dicts, recall_dict_list
 
     @staticmethod
-    def generate_recall_record(box_preds, recall_dict, batch_index, data_dict=None, thresh_list=None):
+    def generate_recall_record(box_preds, recall_dict, batch_index, gt_boxes=None, data_dict=None, thresh_list=None):
         if 'gt_boxes' not in data_dict:
             return recall_dict
         
         rois = data_dict['rois'][batch_index] if 'rois' in data_dict else None
-        gt_boxes = data_dict['gt_boxes'][batch_index]
+        
+        if gt_boxes is not None:
+            gt_boxes = gt_boxes
+        else:
+            gt_boxes = data_dict['gt_boxes'][batch_index]
 
         if recall_dict.__len__() == 0:
             recall_dict = {'gt': 0}
+            recall_dict['gt_car'] = 0
+            recall_dict['gt_cyc'] = 0
+            recall_dict['gt_ped'] = 0
             for cur_thresh in thresh_list:
                 recall_dict['roi_%s' % (str(cur_thresh))] = 0
                 recall_dict['rcnn_%s' % (str(cur_thresh))] = 0
+                recall_dict['roi_%s_car' % (str(cur_thresh))] = 0
+                recall_dict['rcnn_%s_car' % (str(cur_thresh))] = 0
+                recall_dict['roi_%s_cyc' % (str(cur_thresh))] = 0
+                recall_dict['rcnn_%s_cyc' % (str(cur_thresh))] = 0
+                recall_dict['roi_%s_ped' % (str(cur_thresh))] = 0
+                recall_dict['rcnn_%s_ped' % (str(cur_thresh))] = 0
 
         cur_gt = gt_boxes
         k = cur_gt.__len__() - 1
@@ -328,28 +356,40 @@ class Detector3DTemplate(nn.Module):
             k -= 1
         cur_gt = cur_gt[:k + 1]
 
-        if cur_gt.shape[0] > 0:
-            if box_preds.shape[0] > 0:
-                iou3d_rcnn = iou3d_nms_utils.boxes_iou3d_gpu(box_preds[:, 0:7], cur_gt[:, 0:7])
-            else:
-                iou3d_rcnn = torch.zeros((0, cur_gt.shape[0]))
-
-            if rois is not None:
-                iou3d_roi = iou3d_nms_utils.boxes_iou3d_gpu(rois[:, 0:7], cur_gt[:, 0:7])
-
-            for cur_thresh in thresh_list:
-                if iou3d_rcnn.shape[0] == 0:
-                    recall_dict['rcnn_%s' % str(cur_thresh)] += 0
+        cur_gt_car = cur_gt[cur_gt[:, -1] == 1]
+        cur_gt_ped = cur_gt[cur_gt[:, -1] == 2]
+        cur_gt_cyc = cur_gt[cur_gt[:, -1] == 3]
+        gt_dict = dict()
+        gt_dict['gt_car'] = cur_gt_car
+        gt_dict['gt_ped'] = cur_gt_ped
+        gt_dict['gt_cyc'] = cur_gt_cyc
+        gt_dict['gt'] = cur_gt
+        
+        for (name, cur_gt) in gt_dict.items():
+            #print('name: ', name[3:])
+            if cur_gt.shape[0] > 0:
+                if box_preds.shape[0] > 0:
+                    iou3d_rcnn = iou3d_nms_utils.boxes_iou3d_gpu(box_preds[:, 0:7], cur_gt[:, 0:7])
                 else:
-                    rcnn_recalled = (iou3d_rcnn.max(dim=0)[0] > cur_thresh).sum().item()
-                    recall_dict['rcnn_%s' % str(cur_thresh)] += rcnn_recalled
-                if rois is not None:
-                    roi_recalled = (iou3d_roi.max(dim=0)[0] > cur_thresh).sum().item()
-                    recall_dict['roi_%s' % str(cur_thresh)] += roi_recalled
+                    iou3d_rcnn = torch.zeros((0, cur_gt.shape[0]))
 
-            recall_dict['gt'] += cur_gt.shape[0]
-        else:
-            gt_iou = box_preds.new_zeros(box_preds.shape[0])
+                if rois is not None:
+                    iou3d_roi = iou3d_nms_utils.boxes_iou3d_gpu(rois[:, 0:7], cur_gt[:, 0:7])
+
+                for cur_thresh in thresh_list:
+                    if iou3d_rcnn.shape[0] == 0:
+                        recall_dict['rcnn_%s%s' % (str(cur_thresh), name[2:])] += 0
+                    else:
+                        rcnn_recalled = (iou3d_rcnn.max(dim=0)[0] > cur_thresh).sum().item()
+                        recall_dict['rcnn_%s%s' % (str(cur_thresh), name[2:])] += rcnn_recalled
+                    if rois is not None:
+                        roi_recalled = (iou3d_roi.max(dim=0)[0] > cur_thresh).sum().item()
+                        recall_dict['roi_%s%s' % (str(cur_thresh), name[2:])] += roi_recalled
+
+                recall_dict[name] += cur_gt.shape[0]
+            else:
+                gt_iou = box_preds.new_zeros(box_preds.shape[0])
+
         return recall_dict
 
     def load_params_from_file(self, filename, logger, to_cpu=False):
