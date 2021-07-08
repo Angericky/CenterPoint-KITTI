@@ -523,16 +523,20 @@ class CenterHead(nn.Module):
             self.forward_ret_dict['cls_preds']).permute(0, 3, 1, 2)
         device = pred_heatmaps.device
         gt_heatmaps = self.forward_ret_dict['heatmaps'][0].to(device)
-        num_pos = gt_heatmaps.eq(1).float().sum().item()
-
+        num_pos = gt_heatmaps.ge(0.0001).float().sum().item()
+        
+        # print('num_pos: ', num_pos)
         # import pdb
         # pdb.set_trace()
         # import cv2
-        # heatmap=np.array(heatmaps[0][0][0].cpu()) * 255
-        # heatmap=heatmap.astype(np.uint8)
-        # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
-        # cv2.imshow('heatmap',heatmap)
-        # cv2.waitKey(0)
+        # for i in range(gt_heatmaps.shape[0]):
+        #     num_pos = gt_heatmaps[i].eq(1).float().sum().item()
+        #     print('nun_pos %d: ' % i, num_pos)
+        #     heatmap=np.array(gt_heatmaps[i].permute(1,2,0).cpu()) * 255
+        #     heatmap=heatmap.astype(np.uint8)
+        #     #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+        #     cv2.imshow('heatmap',heatmap)
+        #     cv2.waitKey(0)
 
         cls_loss = self.loss_cls(
             pred_heatmaps,
@@ -557,9 +561,14 @@ class CenterHead(nn.Module):
 
         ind = inds
         num = masks.float().sum()
-        pred = self.forward_ret_dict['box_preds']  # N x (HxW) x 7
+        pred = self.forward_ret_dict['box_preds']  # B x M x 7
         pred = pred.view(pred.size(0), -1, pred.size(3))
         pred = self._gather_feat(pred, ind)
+
+        # import pdb
+        # if self.forward_ret_dict['heatmaps'][0].ge(1).float().sum().item() != num.item():
+        #     print('ht: ', self.forward_ret_dict['heatmaps'][0].ge(1).float().sum().item(), ' num: ', num.item())
+        #     pdb.set_trace()
         mask = masks.unsqueeze(2).expand_as(target_box).float()
         isnotnan = (~torch.isnan(target_box)).float()
         mask *= isnotnan
@@ -567,6 +576,19 @@ class CenterHead(nn.Module):
         code_weights = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['code_weights']
         bbox_weights = mask * mask.new_tensor(code_weights[:pred.shape[2]])
 
+        # rcnn_batch_size = 
+        # reg_targets = target_box.view(rcnn_batch_size, -1)
+        # rcnn_loss_reg = F.l1_loss(
+        #     rcnn_reg.view(rcnn_batch_size, -1),
+        #     reg_targets,
+        #     reduction='none'
+        # )  # [B, M, 7]
+
+        # rcnn_loss_reg = rcnn_loss_reg * rcnn_loss_reg.new_tensor(\
+        #     loss_cfgs.LOSS_WEIGHTS['code_weights'])
+
+        # rcnn_loss_reg = (rcnn_loss_reg.view(rcnn_batch_size, -1) * fg_mask.unsqueeze(dim=-1).float()).sum() / max(fg_sum, 1)
+        
         loc_loss = l1_loss(
             pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
         

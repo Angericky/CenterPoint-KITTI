@@ -44,6 +44,7 @@ class Detector3DTemplate(nn.Module):
             'cy_grid_size': self.dataset.cy_grid_size if hasattr(self.dataset, 'cy_grid_size') else None
         }
         for module_name in self.module_topology:
+            print('module_name: ', module_name)
             module, model_info_dict = getattr(self, 'build_%s' % module_name)(
                 model_info_dict=model_info_dict
             )
@@ -67,7 +68,7 @@ class Detector3DTemplate(nn.Module):
     def build_backbone_3d(self, model_info_dict):
         if self.model_cfg.get('BACKBONE_3D', None) is None:
             return None, model_info_dict
-
+        
         backbone_3d_module = backbones_3d.__all__[self.model_cfg.BACKBONE_3D.NAME](
             model_cfg=self.model_cfg.BACKBONE_3D,
             input_channels=model_info_dict['num_point_features'],
@@ -95,7 +96,7 @@ class Detector3DTemplate(nn.Module):
     def build_backbone_2d(self, model_info_dict):
         if self.model_cfg.get('BACKBONE_2D', None) is None:
             return None, model_info_dict
-
+        
         backbone_2d_module = backbones_2d.__all__[self.model_cfg.BACKBONE_2D.NAME](
             model_cfg=self.model_cfg.BACKBONE_2D,
             input_channels=model_info_dict['num_bev_features'],
@@ -302,8 +303,17 @@ class Detector3DTemplate(nn.Module):
 
             range_boxes = [range_box_1, range_box_2, range_box_3]
 
+            gt_boxes_all = batch_dict['gt_boxes'][index]
+            # gt_boxes = gt_boxes_all
+
+            # recall_dict_list[i] = self.generate_recall_record(
+            #     box_preds=final_boxes if 'rois' not in batch_dict else src_box_preds,
+            #     recall_dict=recall_dict, batch_index=index, data_dict=batch_dict,
+            #     gt_boxes=gt_boxes,
+            #     thresh_list=post_process_cfg.RECALL_THRESH_LIST
+            # )
+
             for i, range_box in enumerate(range_boxes):
-                gt_boxes_all = batch_dict['gt_boxes'][index]
                 range_gt_box = torch.sqrt(gt_boxes_all[:, 0] ** 2 + gt_boxes_all[:, 1] ** 2)
                 gt_boxes = gt_boxes_all[(range_gt_box <= 81.2 / 3 * (i+1)) & (range_gt_box > 81.2 / 3 * i)]
 
