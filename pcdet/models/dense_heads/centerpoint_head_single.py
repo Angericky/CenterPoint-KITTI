@@ -523,8 +523,8 @@ class CenterHead(nn.Module):
             self.forward_ret_dict['cls_preds']).permute(0, 3, 1, 2)
         device = pred_heatmaps.device
         gt_heatmaps = self.forward_ret_dict['heatmaps'][0].to(device)
-        num_pos = gt_heatmaps.ge(0.0001).float().sum().item()
-        
+        num_pos = gt_heatmaps.ge(1).float().sum().item()
+
         # print('num_pos: ', num_pos)
         # import pdb
         # pdb.set_trace()
