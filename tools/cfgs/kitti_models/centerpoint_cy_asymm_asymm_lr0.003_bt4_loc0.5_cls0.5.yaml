@@ -46,7 +46,7 @@ MODEL:
 
         LOSS_CONFIG:
             LOSS_WEIGHTS: {
-                'cls_weight': 1,
+                'cls_weight': 0.5,
                 'loc_weight': 0.5,
                 'code_weights': [1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
             }
@@ -71,7 +71,7 @@ OPTIMIZATION:
     NUM_EPOCHS: 80
 
     OPTIMIZER: adam_onecycle
-    LR: 0.001
+    LR: 0.003
     WEIGHT_DECAY: 0.01
     MOMENTUM: 0.9
 

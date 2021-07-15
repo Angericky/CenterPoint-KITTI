@@ -4,7 +4,7 @@ import torch.nn as nn
 
 
 class ResBlock(nn.Module):
-    def __init__(self, in_filters, out_filters, stride=1, padding=1):
+    def __init__(self, in_filters, out_filters, stride=1, padding=1, pooling=True, pooling_all=True):
         super(ResBlock, self).__init__()
 
         self.conv1_3x1 = nn.Conv2d(in_filters, out_filters, kernel_size=(3,1),
@@ -26,7 +26,11 @@ class ResBlock(nn.Module):
                         stride=stride, padding=(0, padding), bias=False)
         self.bn2_2 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
         self.relu2_2 = nn.ReLU()
-              
+        
+        if pooling:
+            self.pool = nn.Conv2d(out_filters, out_filters, kernel_size=(3,3),
+                                stride=2, padding=padding, bias=False)
+            
         self.weight_initialization()
 
     def weight_initialization(self):
@@ -53,9 +57,66 @@ class ResBlock(nn.Module):
         res = self.relu2_2(res)
 
         res = res + shortcut
-
+            
         return res
 
+
+class UpBlock(nn.Module):
+    def __init__(self, in_filters, out_filters, kernel_size=(3, 3, 3), indice_key=None, up_key=None):
+        super(UpBlock, self).__init__()
+        # self.drop_out = drop_out
+        self.trans_dilao = conv3x3(in_filters, out_filters, indice_key=indice_key + "new_up")
+        self.trans_act = nn.LeakyReLU()
+        self.trans_bn = nn.BatchNorm1d(out_filters)
+
+        self.conv1 = conv1x3(out_filters, out_filters, indice_key=indice_key)
+        self.act1 = nn.LeakyReLU()
+        self.bn1 = nn.BatchNorm1d(out_filters)
+
+        self.conv2 = conv3x1(out_filters, out_filters, indice_key=indice_key)
+        self.act2 = nn.LeakyReLU()
+        self.bn2 = nn.BatchNorm1d(out_filters)
+
+        self.conv3 = conv3x3(out_filters, out_filters, indice_key=indice_key)
+        self.act3 = nn.LeakyReLU()
+        self.bn3 = nn.BatchNorm1d(out_filters)
+        # self.dropout3 = nn.Dropout3d(p=dropout_rate)
+
+        self.up_subm = spconv.SparseInverseConv3d(out_filters, out_filters, kernel_size=3, indice_key=up_key,
+                                                  bias=False)
+
+        self.weight_initialization()
+
+    def weight_initialization(self):
+        for m in self.modules():
+            if isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x, skip):
+        upA = self.trans_dilao(x)
+        upA.features = self.trans_act(upA.features)
+        upA.features = self.trans_bn(upA.features)
+
+        ## upsample
+        upA = self.up_subm(upA)
+
+        upA.features = upA.features + skip.features
+
+        upE = self.conv1(upA)
+        upE.features = self.act1(upE.features)
+        upE.features = self.bn1(upE.features)
+
+        upE = self.conv2(upE)
+        upE.features = self.act2(upE.features)
+        upE.features = self.bn2(upE.features)
+
+        upE = self.conv3(upE)
+        upE.features = self.act3(upE.features)
+        upE.features = self.bn3(upE.features)
+
+        return upE
+    
 
 class AsymmBEVBackbone(nn.Module):
     def __init__(self, model_cfg, input_channels, cylind_range=None, cy_grid_size=None):
@@ -99,29 +160,29 @@ class AsymmBEVBackbone(nn.Module):
 
             self.blocks.append(nn.Sequential(*cur_layers))
              
-        if len(upsample_strides) > 0:
-            stride = upsample_strides[idx]
-            if stride >= 1:
-                self.deblocks.append(nn.Sequential(
-                    nn.ConvTranspose2d(
-                        num_filters[idx], num_upsample_filters[idx],
-                        upsample_strides[idx],
-                        stride=upsample_strides[idx], bias=False
-                    ),
-                    nn.BatchNorm2d(num_upsample_filters[idx], eps=1e-3, momentum=0.01),
-                    nn.ReLU()
-                ))
-            else:
-                stride = np.round(1 / stride).astype(np.int)
-                self.deblocks.append(nn.Sequential(
-                    nn.Conv2d(
-                        num_filters[idx], num_upsample_filters[idx],
-                        stride,
-                        stride=stride, bias=False
-                    ),
-                    nn.BatchNorm2d(num_upsample_filters[idx], eps=1e-3, momentum=0.01),
-                    nn.ReLU()
-                ))
+            if len(upsample_strides) > 0:
+                stride = upsample_strides[idx]
+                if stride >= 1:
+                    self.deblocks.append(nn.Sequential(
+                        nn.ConvTranspose2d(
+                            num_filters[idx], num_upsample_filters[idx],
+                            upsample_strides[idx],
+                            stride=upsample_strides[idx], bias=False
+                        ),
+                        nn.BatchNorm2d(num_upsample_filters[idx], eps=1e-3, momentum=0.01),
+                        nn.ReLU()
+                    ))
+                else:
+                    stride = np.round(1 / stride).astype(np.int)
+                    self.deblocks.append(nn.Sequential(
+                        nn.Conv2d(
+                            num_filters[idx], num_upsample_filters[idx],
+                            stride,
+                            stride=stride, bias=False
+                        ),
+                        nn.BatchNorm2d(num_upsample_filters[idx], eps=1e-3, momentum=0.01),
+                        nn.ReLU()
+                    ))
 
         c_in = sum(num_upsample_filters)
         if len(upsample_strides) > num_levels:
@@ -212,29 +273,29 @@ class BaseBEVBackbone(nn.Module):
                 ])
             self.blocks.append(nn.Sequential(*cur_layers))
 
-        if len(upsample_strides) > 0:
-            stride = upsample_strides[idx]
-            if stride >= 1:
-                self.deblocks.append(nn.Sequential(
-                    nn.ConvTranspose2d(
-                        num_filters[idx], num_upsample_filters[idx],
-                        upsample_strides[idx],
-                        stride=upsample_strides[idx], bias=False
-                    ),
-                    nn.BatchNorm2d(num_upsample_filters[idx], eps=1e-3, momentum=0.01),
-                    nn.ReLU()
-                ))
-            else:
-                stride = np.round(1 / stride).astype(np.int)
-                self.deblocks.append(nn.Sequential(
-                    nn.Conv2d(
-                        num_filters[idx], num_upsample_filters[idx],
-                        stride,
-                        stride=stride, bias=False
-                    ),
-                    nn.BatchNorm2d(num_upsample_filters[idx], eps=1e-3, momentum=0.01),
-                    nn.ReLU()
-                ))
+            if len(upsample_strides) > 0:
+                stride = upsample_strides[idx]
+                if stride >= 1:
+                    self.deblocks.append(nn.Sequential(
+                        nn.ConvTranspose2d(
+                            num_filters[idx], num_upsample_filters[idx],
+                            upsample_strides[idx],
+                            stride=upsample_strides[idx], bias=False
+                        ),
+                        nn.BatchNorm2d(num_upsample_filters[idx], eps=1e-3, momentum=0.01),
+                        nn.ReLU()
+                    ))
+                else:
+                    stride = np.round(1 / stride).astype(np.int)
+                    self.deblocks.append(nn.Sequential(
+                        nn.Conv2d(
+                            num_filters[idx], num_upsample_filters[idx],
+                            stride,
+                            stride=stride, bias=False
+                        ),
+                        nn.BatchNorm2d(num_upsample_filters[idx], eps=1e-3, momentum=0.01),
+                        nn.ReLU()
+                    ))
 
         c_in = sum(num_upsample_filters)
         if len(upsample_strides) > num_levels:
