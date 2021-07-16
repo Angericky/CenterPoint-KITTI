@@ -7,8 +7,7 @@ class ResBlock(nn.Module):
     def __init__(self, in_filters, out_filters, stride=1, padding=1):
         super(ResBlock, self).__init__()
 
-        self.conv1_3x1 = nn.Conv2d(in_filters, out_filters, kernel_size=(3,1),
-                        stride=1, padding=(padding, 0), bias=False)
+        self.conv1_3x1 = nn.Conv2d(in_filters, out_filters, kernel_size=(3,1),stride=1, padding=(padding,0), bias=False)
         self.bn1_1 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
         self.relu1_1 = nn.ReLU()
 
@@ -43,6 +42,7 @@ class ResBlock(nn.Module):
 
     def forward(self, x, **args):
         shortcut = self.conv1_3x1(x)
+
         shortcut = self.bn1_1(shortcut)
         shortcut = self.relu1_1(shortcut)
 
@@ -106,8 +106,7 @@ class UpBlock(nn.Module):
 
         ## upsample
         upA = self.up_subm(upA)
-        import pdb
-        pdb.set_trace()
+
         upE = self.conv1(upA)
         upE = self.act1(upE)
         upE = self.bn1(upE)
@@ -154,8 +153,8 @@ class AsymmBEVBackbone(nn.Module):
 
         for idx in range(num_levels):
             cur_layers = [
-                nn.ZeroPad2d(1),
-                ResBlock(c_in_list[idx], num_filters[idx], stride=layer_strides[idx], padding=0)
+                #nn.ZeroPad2d(1),
+                ResBlock(c_in_list[idx], num_filters[idx], stride=layer_strides[idx])
             ]
 
             for k in range(layer_nums[idx]):
@@ -222,9 +221,7 @@ class AsymmBEVBackbone(nn.Module):
 
         if len(self.deblocks) > len(self.blocks):
             x = self.deblocks[-1](x)
-        
-        import pdb
-        pdb.set_trace()
+
         data_dict['spatial_features_2d'] = x
 
         return data_dict
