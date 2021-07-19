@@ -26,11 +26,11 @@ class ResBlock(nn.Module):
         self.bn2_2 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
         self.relu2_2 = nn.ReLU()
         
-        # self.pooling = False
-        # if stride == 2:
-        self.pool = nn.Conv2d(out_filters, out_filters, kernel_size=(3,3),
+        self.pooling = False
+        if stride == 2:
+            self.pool = nn.Conv2d(out_filters, out_filters, kernel_size=(3,3),
                                 stride=stride, padding=padding, bias=False)
-            # self.pooling = True
+            self.pooling = True
             
         self.weight_initialization()
 
@@ -60,18 +60,18 @@ class ResBlock(nn.Module):
 
         res = res + shortcut
         
-        resB = self.pool(res)
-
-        return resB
+        if self.pooling:
+            resB = self.pool(res)
+            return resB
             
         return res
 
 
 class UpBlock(nn.Module):
-    def __init__(self, in_filters, out_filters, stride=1, kernel_size=(3, 3, 3), indice_key=None, up_key=None):
+    def __init__(self, in_filters, out_filters, stride=1, kernel_size=3, indice_key=None, up_key=None):
         super(UpBlock, self).__init__()
         # self.drop_out = drop_out
-        self.trans_dilao = nn.ConvTranspose2d(in_filters, out_filters, kernel_size=(3,3), stride=stride, padding=1, bias=False)
+        self.trans_dilao = nn.ConvTranspose2d(in_filters, out_filters, kernel_size=(2,2), stride=stride, bias=False)
         self.trans_act = nn.LeakyReLU()
         self.trans_bn = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
 
@@ -88,8 +88,8 @@ class UpBlock(nn.Module):
         self.bn3 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
         # self.dropout3 = nn.Dropout3d(p=dropout_rate)
 
-        self.up_subm = nn.ConvTranspose2d(out_filters, out_filters, 2,
-                                                  bias=False)
+        #self.up_subm = nn.ConvTranspose2d(out_filters, out_filters, 3,
+        #                                          bias=False)
 
         self.weight_initialization()
 
@@ -104,8 +104,8 @@ class UpBlock(nn.Module):
         upA = self.trans_act(upA)
         upA = self.trans_bn(upA)
 
-        ## upsample
-        upA = self.up_subm(upA)
+        # upsample
+        #upA = self.up_subm(upA)
 
         upE = self.conv1(upA)
         upE = self.act1(upE)
@@ -316,12 +316,13 @@ class BaseBEVBackbone(nn.Module):
         ups = []
         ret_dict = {}
         x = spatial_features
-
+        
         for i in range(len(self.blocks)):
             x = self.blocks[i](x)
 
             stride = int(spatial_features.shape[2] / x.shape[2])
             ret_dict['spatial_features_%dx' % stride] = x
+
             if len(self.deblocks) > 0:
                 ups.append(self.deblocks[i](x))
             else:

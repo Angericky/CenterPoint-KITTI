@@ -256,13 +256,16 @@ class Asymm_3d_spconv(nn.Module):
             self.sparse_shape = cy_grid_size[::-1] + [1, 0, 0]
 
             self.downCntx = ResContextBlock(input_channels, init_size, indice_key="pre")
-            # [1624, 1496, 41] <- [810, 748, 21]
+            # [1624, 1496, 41] <- [812, 748, 21]
+            # [1624, 376, 41] <- [810, 188, 21]
             # [1600, 1408, 41] <- [800, 704, 21]
             self.resBlock2 = ResBlock(init_size, 2 * init_size, 0.2, height_pooling=True, indice_key="down2")
-            # [812, 750, 21] <- [405, 374, 11]
+            # [812, 748, 21] <- [406, 374, 11]
+            # [812, 188, 21] <- [406, 94, 11]
             # [800, 704, 21] <- [400, 352, 11]
             self.resBlock3 = ResBlock(2 * init_size, 4 * init_size, 0.2, height_pooling=True, indice_key="down3")
             # [406, 374, 11] <- [203, 187, 5]
+            # [406, 94, 11] <- [406, 48, 5]
             # [400, 352, 11] <- [200, 352, 5]
             self.resBlock4 = ResBlock(4 * init_size, 8 * init_size, 0.2, height_pooling=True, padding=(0, 1, 1),
                                     indice_key="down4")
@@ -319,6 +322,7 @@ class Asymm_3d_spconv(nn.Module):
         down1c, down1b = self.resBlock2(ret)
         down2c, down2b = self.resBlock3(down1c)
         down3c, down3b = self.resBlock4(down2c)
+
         # down4c, down4b = self.resBlock5(down3c)
 
         # up4e = self.upBlock0(down4c, down4b)
