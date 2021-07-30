@@ -1,7 +1,3 @@
-# -*- coding:utf-8 -*-
-# author: Xinge
-# @file: segmentator_3d_asymm_spconv.py
-
 import numpy as np
 import spconv
 import torch
@@ -91,8 +87,8 @@ class ResContextBlock(nn.Module):
 
 
 class ResBlock(nn.Module):
-    def __init__(self, in_filters, out_filters, dropout_rate, kernel_size=(3, 3, 3), stride=1, padding=1,
-                 pooling=True, drop_out=True, height_pooling=False, indice_key=None):
+    def __init__(self, in_filters, out_filters, dropout_rate, kernel_size=(3, 3, 3), stride=2, padding=1,
+                 pooling=True, drop_out=True,  indice_key=None):
         super(ResBlock, self).__init__()
         self.pooling = pooling
         self.drop_out = drop_out
@@ -114,11 +110,7 @@ class ResBlock(nn.Module):
         self.bn2 = nn.BatchNorm1d(out_filters)
 
         if pooling:
-            if height_pooling:
-                self.pool = spconv.SparseConv3d(out_filters, out_filters, kernel_size=kernel_size, stride=2,
-                                                padding=1, indice_key=indice_key, bias=False)
-            else:
-                self.pool = spconv.SparseConv3d(out_filters, out_filters, kernel_size=kernel_size, stride=(2, 1, 1),
+            self.pool = spconv.SparseConv3d(out_filters, out_filters, kernel_size=kernel_size, stride=stride,
                                                 padding=padding, indice_key=indice_key, bias=False)
                                                 
         self.weight_initialization()
@@ -257,17 +249,17 @@ class Asymm_3d_spconv(nn.Module):
 
             self.downCntx = ResContextBlock(input_channels, init_size, indice_key="pre")
             # [1624, 1496, 41] <- [812, 748, 21]
-            # [1624, 376, 41] <- [810, 188, 21]
+
             # [1600, 1408, 41] <- [800, 704, 21]
-            self.resBlock2 = ResBlock(init_size, 2 * init_size, 0.2, height_pooling=True, indice_key="down2")
+            self.resBlock2 = ResBlock(init_size, 2 * init_size, 0.2, indice_key="down2")
             # [812, 748, 21] <- [406, 374, 11]
-            # [812, 188, 21] <- [406, 94, 11]
+
             # [800, 704, 21] <- [400, 352, 11]
-            self.resBlock3 = ResBlock(2 * init_size, 4 * init_size, 0.2, height_pooling=True, indice_key="down3")
+            self.resBlock3 = ResBlock(2 * init_size, 4 * init_size, 0.2, indice_key="down3")
             # [406, 374, 11] <- [203, 187, 5]
-            # [406, 94, 11] <- [406, 48, 5]
+
             # [400, 352, 11] <- [200, 352, 5]
-            self.resBlock4 = ResBlock(4 * init_size, 8 * init_size, 0.2, height_pooling=True, padding=(0, 1, 1),
+            self.resBlock4 = ResBlock(4 * init_size, 8 * init_size, 0.2, padding=(0, 1, 1),
                                     indice_key="down4")
             #self.resBlock5 = ResBlock(8 * init_size, 16 * init_size, 0.2, height_pooling=False,
             #                          indice_key="down5")
@@ -279,7 +271,7 @@ class Asymm_3d_spconv(nn.Module):
 
             #self.ReconNet = ReconBlock(2 * init_size, 2 * init_size, indice_key="recon")
             
-            self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2, height_pooling=False, kernel_size=(3, 1, 1), padding=0, indice_key="out")   
+            self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2,  kernel_size=(3, 1, 1), padding=0, stride=(2, 1, 1), indice_key="out")   
 
         else:
             sparse_shape = np.array(grid_size)   # shape for (H, W, L)
@@ -335,6 +327,16 @@ class Asymm_3d_spconv(nn.Module):
         # up0e.features = torch.cat((up0e.features, up1e.features), 1)
 
         out, _ = self.conv_output(down3c)
+        # import cv2
+        # import pdb
+        # pdb.set_trace()
+
+        # bev = out
+        # #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+        # cv2.imshow('bev image:', bev)
+        # cv2.waitKey(0)
+        # import pdb
+        # pdb.set_trace()
         batch_dict.update({
             'encoded_spconv_tensor': out,
             'encoded_spconv_tensor_stride': 8
