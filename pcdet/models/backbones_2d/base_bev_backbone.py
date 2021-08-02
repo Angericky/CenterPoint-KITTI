@@ -16,12 +16,12 @@ class ResBlock(nn.Module):
         self.bn1_2 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
         self.relu1_2 = nn.ReLU()
 
-        self.conv2_3x1 = nn.Conv2d(in_filters, out_filters, kernel_size=(3,1),
+        self.conv2_3x1 = nn.Conv2d(out_filters, out_filters, kernel_size=(3,1),
                         stride=1, padding=(padding, 0), bias=False)
         self.bn2_1 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
         self.relu2_1 = nn.ReLU()
 
-        self.conv2_1x3 = nn.Conv2d(out_filters, out_filters, kernel_size=(1,3),
+        self.conv2_1x3 = nn.Conv2d(in_filters, out_filters, kernel_size=(1,3),
                         stride=1, padding=(0, padding), bias=False)
         self.bn2_2 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
         self.relu2_2 = nn.ReLU()
