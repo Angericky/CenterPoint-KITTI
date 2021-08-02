@@ -213,9 +213,10 @@ class CenterHead(nn.Module):
         #     heatmap=heatmap.astype(np.uint8).transpose(1, 2, 0)
 
         #     # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
-        #     cv2.imshow('heatmap_%d' % i,heatmap)
-
-        # cv2.waitKey(0)
+        #     cv2.imwrite('heatmap_%d_interp.png' % i,heatmap)
+        # import pdb
+        # pdb.set_trace()
+        #      cv2.waitKey(0)
 
         # import pdb
         # pdb.set_trace()
@@ -644,7 +645,7 @@ def clip_sigmoid(x, eps=1e-4):
     return y
 
 
-def gaussian_2d(shape, sigma=1):
+def gaussian_2d(shape, sigma=1, sigma2=None):
     """Generate gaussian map.
 
     Args:
@@ -658,7 +659,12 @@ def gaussian_2d(shape, sigma=1):
     m, n = [(ss - 1.) / 2. for ss in shape]
     y, x = np.ogrid[-m:m + 1, -n:n + 1]
 
-    h = np.exp(-(x * x + y * y) / (2 * sigma * sigma))
+    if sigma2 is not None:
+        sigma1 = sigma
+        sigma2 = sigma2
+        h = np.exp(-(x * x  / (2 * sigma1 * sigma1) + y * y / (2 * sigma2 * sigma2)))
+    else:
+        h = np.exp(-(x * x + y * y) / (2 * sigma * sigma))
     h[h < np.finfo(h.dtype).eps * h.max()] = 0
     return h
 
@@ -691,7 +697,7 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
         gaussian_half = np.interp(y_index, index, gaussian_center[i])
         gaussian[:, i] = np.concatenate((gaussian_half, gaussian_half[:-1][::-1]), axis=0)
 
-    # gaussian = gaussian_2d((diameter, y_diameter), sigma=diameter / 6).transpose(1, 0)
+    # gaussian = gaussian_2d((y_diameter, diameter), sigma=diameter / 6, sigma2 = y_diameter / 6)
 
     x, y = int(center[0]), int(center[1])
     
@@ -719,7 +725,7 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
     # masked_gaussian = torch.from_numpy(
     #     gaussian[radius - top:radius + bottom,
     #              radius - left:radius + right]).to(heatmap.device,
-    #                                                torch.float32)
+    #                                                torch.float32) 
     
     if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
         torch.max(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
