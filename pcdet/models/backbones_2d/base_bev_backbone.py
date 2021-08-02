@@ -50,11 +50,11 @@ class ResBlock(nn.Module):
         shortcut = self.bn1_2(shortcut)
         shortcut = self.relu1_2(shortcut)
 
-        res = self.conv2_3x1(x)
+        res = self.conv2_1x3(x)
         res = self.bn2_1(res)
         res = self.relu2_1(res)
 
-        res = self.conv2_1x3(res)
+        res = self.conv2_3x1(res)
         res = self.bn2_2(res)
         res = self.relu2_2(res)
 
