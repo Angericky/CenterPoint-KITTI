@@ -2,6 +2,7 @@ import numpy as np
 import spconv
 import torch
 from torch import nn
+from functools import partial
 
 # features: (Z, phi, rho)
 def conv3x3(in_planes, out_planes, stride=1, indice_key=None):
@@ -238,6 +239,18 @@ class ReconBlock(nn.Module):
         return shortcut
 
 
+def subm_block(in_channels, out_channels, kernel_size, indice_key=None, stride=1, padding=0):
+    norm_fn = partial(nn.BatchNorm1d, eps=1e-3, momentum=0.01)
+    conv = spconv.SubMConv3d(in_channels, out_channels, kernel_size, bias=False, indice_key=indice_key)
+
+    m = spconv.SparseSequential(
+        conv,
+        norm_fn(out_channels),
+        nn.ReLU(),
+    )
+
+    return m
+
 class Asymm_3d_spconv(nn.Module):
     def __init__(self, model_cfg, input_channels, grid_size, cy_grid_size=None, init_size=16, **kwargs):
         super().__init__()
@@ -252,15 +265,30 @@ class Asymm_3d_spconv(nn.Module):
 
             # [1600, 1408, 41] <- [800, 704, 21]
             self.resBlock2 = ResBlock(init_size, 2 * init_size, 0.2, indice_key="down2")
+            
+            self.conv2 = spconv.SparseSequential(
+                subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
+                subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
+            )
             # [812, 748, 21] <- [406, 374, 11]
 
             # [800, 704, 21] <- [400, 352, 11]
             self.resBlock3 = ResBlock(2 * init_size, 4 * init_size, 0.2, indice_key="down3")
+            
+            self.conv3 = spconv.SparseSequential(
+                subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
+                subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
+            )
             # [406, 374, 11] <- [203, 187, 5]
 
             # [400, 352, 11] <- [200, 352, 5]
-            self.resBlock4 = ResBlock(4 * init_size, 8 * init_size, 0.2, padding=(0, 1, 1),
+            self.resBlock4 = ResBlock(4 * init_size, 4 * init_size, 0.2, padding=(0, 1, 1),
                                     indice_key="down4")
+            
+            self.conv4 = spconv.SparseSequential(
+                subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm4'),
+                subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm4'),
+            )
             #self.resBlock5 = ResBlock(8 * init_size, 16 * init_size, 0.2, height_pooling=False,
             #                          indice_key="down5")
 
@@ -271,7 +299,7 @@ class Asymm_3d_spconv(nn.Module):
 
             #self.ReconNet = ReconBlock(2 * init_size, 2 * init_size, indice_key="recon")
             
-            self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2,  kernel_size=(3, 1, 1), padding=0, stride=(2, 1, 1), indice_key="out")   
+            self.conv_output = ResBlock(4 * init_size, 8 * init_size, 0.2,  kernel_size=(3, 1, 1), padding=0, stride=(2, 1, 1), indice_key="out")   
 
         else:
             sparse_shape = np.array(grid_size)   # shape for (H, W, L)
@@ -311,9 +339,13 @@ class Asymm_3d_spconv(nn.Module):
         ret = spconv.SparseConvTensor(voxel_features, coors, self.sparse_shape,
                                       batch_size)
         ret = self.downCntx(ret)
+
         down1c, down1b = self.resBlock2(ret)
+        down1c = self.conv2(down1c)
         down2c, down2b = self.resBlock3(down1c)
+        down2c = self.conv3(down2c)
         down3c, down3b = self.resBlock4(down2c)
+        down3c = self.conv4(down3c)
 
         # down4c, down4b = self.resBlock5(down3c)
 
