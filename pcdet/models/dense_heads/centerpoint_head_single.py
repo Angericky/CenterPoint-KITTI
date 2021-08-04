@@ -373,7 +373,9 @@ class CenterHead(nn.Module):
                         center_l = cylind_size[1] * rho_center
                         y_factor = cylind_size[0]  / center_l
 
-                        draw_heatmap_gaussian_cylind(heatmap[cls_id], center_int, radius, y_factor=y_factor)
+                        if y_factor < 2:
+                            y_factor = 2
+                        draw_gaussian(heatmap[cls_id], center_int, radius, y_factor=y_factor)
                     else:
                         draw_gaussian(heatmap[cls_id], center_int, radius)
 
@@ -729,17 +731,17 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
     except:
         y_radius = radius
     y_diameter = 2 * y_radius + 1
-    gaussian_center = gaussian_2d((diameter, diameter), sigma=diameter / 6)
+    # gaussian_center = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
 
-    index = np.linspace(0, diameter - 1, diameter, endpoint=True)
-    y_index = radius  / (y_radius + 1) * np.linspace(0, y_radius + 1, y_radius + 1, endpoint=True)
-    gaussian = np.zeros((y_diameter, diameter))
+    # index = np.linspace(0, diameter - 1, diameter, endpoint=True)
+    # y_index = radius  / (y_radius + 1) * np.linspace(0, y_radius + 1, y_radius + 1, endpoint=True)
+    # gaussian = np.zeros((y_diameter, diameter))
 
-    for i in range(gaussian_center.shape[0]):
-        gaussian_half = np.interp(y_index, index, gaussian_center[i])
-        gaussian[:, i] = np.concatenate((gaussian_half, gaussian_half[:-1][::-1]), axis=0)
+    # for i in range(gaussian_center.shape[0]):
+    #     gaussian_half = np.interp(y_index, index, gaussian_center[i])
+    #     gaussian[:, i] = np.concatenate((gaussian_half, gaussian_half[:-1][::-1]), axis=0)
 
-    # gaussian = gaussian_2d((y_diameter, diameter), sigma=diameter / 6, sigma2 = y_diameter / 6)
+    gaussian = gaussian_2d((y_diameter, diameter), sigma=diameter / 6, sigma2 = y_diameter / 6)
 
     x, y = int(center[0]), int(center[1])
     
