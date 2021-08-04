@@ -202,24 +202,24 @@ class CenterHead(nn.Module):
 
         # transpose heatmaps, because the dimension of tensors in each task is
         # different, we have to use numpy instead of torch to do the transpose.
-        # import cv2
-        # batch_size = heatmaps[0].shape[0]
-        # for i in range(batch_size):
-        #     heatmap = heatmaps[0][i]
-        #     num_pos = heatmap.eq(1).float().sum().item()
-        #     print('num_pos_%d: '%i, num_pos)
+        import cv2
+        batch_size = heatmaps[0].shape[0]
+        for i in range(batch_size):
+            heatmap = heatmaps[0][i]
+            num_pos = heatmap.eq(1).float().sum().item()
+            print('num_pos_%d: '%i, num_pos)
 
-        #     heatmap=np.array(heatmap.cpu()) * 255
-        #     heatmap=heatmap.astype(np.uint8).transpose(1, 2, 0)
+            heatmap=np.array(heatmap.cpu()) * 255
+            heatmap=heatmap.astype(np.uint8).transpose(1, 2, 0)
 
-        #     # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
-        #     cv2.imwrite('heatmap_%d_interp.png' % i,heatmap)
-        # import pdb
-        # pdb.set_trace()
-        #      cv2.waitKey(0)
+            # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+            cv2.imwrite('heatmap_%d_interp.png' % i,heatmap)
+        
 
-        # import pdb
-        # pdb.set_trace()
+        cv2.waitKey(0)
+
+        import pdb
+        pdb.set_trace()
 
         all_targets_dict = {
             'heatmaps': heatmaps,
@@ -306,6 +306,7 @@ class CenterHead(nn.Module):
                 (len(self.class_names[idx]), feature_map_size[1],
                  feature_map_size[0]))
             
+
             anno_box = gt_bboxes_3d.new_zeros((max_objs, self.num_reg_channels),
                                               dtype=torch.float32)
 
@@ -372,7 +373,7 @@ class CenterHead(nn.Module):
                         center_l = cylind_size[1] * rho_center
                         y_factor = cylind_size[0]  / center_l
 
-                        draw_gaussian(heatmap[cls_id], center_int, radius, y_factor=y_factor)
+                        draw_heatmap_gaussian_cylind(heatmap[cls_id], center_int, radius, y_factor=y_factor)
                     else:
                         draw_gaussian(heatmap[cls_id], center_int, radius)
 
@@ -423,6 +424,15 @@ class CenterHead(nn.Module):
                     #    pdb.set_trace()
                         #print('rot: ', rot, ' center_arctan: ', center_arctan, ' y: ', y)
 
+            import cv2
+
+            heatmap=np.array(heatmap.permute(1,2,0).cpu()) * 255
+            heatmap=heatmap.astype(np.uint8)
+                #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+            cv2.imshow('heatmap',heatmap)
+            cv2.waitKey(0)
+
+            
             heatmaps.append(heatmap)
             anno_boxes.append(anno_box)
             masks.append(mask)
@@ -527,18 +537,19 @@ class CenterHead(nn.Module):
         num_pos = gt_heatmaps.ge(1).float().sum().item()
 
         # print('num_pos: ', num_pos)
-        # import pdb
-        # pdb.set_trace()
-        # import cv2
-        # for i in range(gt_heatmaps.shape[0]):
-        #     num_pos = gt_heatmaps[i].eq(1).float().sum().item()
-        #     print('nun_pos %d: ' % i, num_pos)
-        #     heatmap=np.array(gt_heatmaps[i].permute(1,2,0).cpu()) * 255
-        #     heatmap=heatmap.astype(np.uint8)
-        #     #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
-        #     cv2.imshow('heatmap',heatmap)
-        #     cv2.waitKey(0)
-
+ 
+        import cv2
+        for i in range(gt_heatmaps.shape[0]):
+            num_pos = gt_heatmaps[i].eq(1).float().sum().item()
+            print('nun_pos %d: ' % i, num_pos)
+            heatmap=np.array(gt_heatmaps[i].permute(1,2,0).cpu()) * 255
+            heatmap=heatmap.astype(np.uint8)
+            #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+            cv2.imshow('heatmap',heatmap)
+            cv2.waitKey(0)
+        import pdb
+        pdb.set_trace()
+        
         cls_loss = self.loss_cls(
             pred_heatmaps,
             gt_heatmaps,
@@ -669,7 +680,111 @@ def gaussian_2d(shape, sigma=1, sigma2=None):
     return h
 
 
+def gaussian_2d_cylind(shape, rho_center, rho_res, ang_res, sigma=1):
+    """Generate gaussian map.
+
+    Args:
+        shape (list[int]): Shape of the map.
+        sigma (float): Sigma to generate gaussian map.
+            Defaults to 1.
+
+    Returns:
+        np.ndarray: Generated gaussian map.
+    """
+    m, n = [(ss - 1.) / 2. for ss in shape]
+    y, x = np.ogrid[-m:m + 1, -n:n + 1]
+
+    rho_offset = x * rho_res
+    theta_offset = y * ang_res
+    # h = np.exp(-(rho_center * rho_center + (rho_center + rho_offset) ** 2 
+    #     - 2 * rho_center * (rho_center + rho_offset) * np.cos(theta_offset) ) / (2 * sigma * sigma))
+    
+    # print(h)
+    sigma2 = shape[1] / 6
+    h = np.exp(-(x ** 2  / (2 * sigma * sigma) + y ** 2 / (2 * sigma2 * sigma2)))
+    
+    h[h < np.finfo(h.dtype).eps * h.max()] = 0
+    # print(h)
+    # import pdb
+    # pdb.set_trace()
+
+    return h
+
+
 def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
+    """Get gaussian masked heatmap.
+
+    Args:
+        heatmap (torch.Tensor): Heatmap to be masked. shape (phi, rho)
+        center (torch.Tensor): Center coord of the heatmap.
+        radius (int): Radius of gausian.
+        K (int): Multiple of masked_gaussian. Defaults to 1.
+
+    Returns:
+        torch.Tensor: Masked heatmap.
+    """
+    diameter = 2 * radius + 1
+    try:
+        y_radius = int(((radius * y_factor).floor().item()))
+    except:
+        y_radius = radius
+    y_diameter = 2 * y_radius + 1
+    gaussian_center = gaussian_2d((diameter, diameter), sigma=diameter / 6)
+
+    index = np.linspace(0, diameter - 1, diameter, endpoint=True)
+    y_index = radius  / (y_radius + 1) * np.linspace(0, y_radius + 1, y_radius + 1, endpoint=True)
+    gaussian = np.zeros((y_diameter, diameter))
+
+    for i in range(gaussian_center.shape[0]):
+        gaussian_half = np.interp(y_index, index, gaussian_center[i])
+        gaussian[:, i] = np.concatenate((gaussian_half, gaussian_half[:-1][::-1]), axis=0)
+
+    # gaussian = gaussian_2d((y_diameter, diameter), sigma=diameter / 6, sigma2 = y_diameter / 6)
+
+    x, y = int(center[0]), int(center[1])
+    
+    height, width = heatmap.shape[0:2]
+
+    left, right = min(x, radius), min(width - x, radius + 1)
+    top, bottom = min(y, y_radius), min(height - y, y_radius + 1)
+
+    masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
+    masked_gaussian = torch.from_numpy(
+        gaussian[y_radius - top:y_radius + bottom,
+                 radius - left:radius + right]).to(heatmap.device,
+                                                   torch.float32)
+    
+    # gaussian = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
+
+    # x, y = int(center[0]), int(center[1])
+    
+    # height, width = heatmap.shape[0:2]
+
+    # left, right = min(x, radius), min(width - x, radius + 1)
+    # top, bottom = min(y, radius), min(height - y, radius + 1)
+
+    # masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
+    # masked_gaussian = torch.from_numpy(
+    #     gaussian[radius - top:radius + bottom,
+    #              radius - left:radius + right]).to(heatmap.device,
+    #                                                torch.float32) 
+    
+    if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
+        torch.max(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
+    # if radius != y_radius:
+    #     print('radius: ', radius, ' y_radius: ', y_radius)
+    #     print('y_factor: ', y_factor, ' y: ', y)
+    #     import pdb
+    #     pdb.set_trace()
+    #     import cv2
+    #     heatmap2=np.array(heatmap.cpu()) * 255
+    #     heatmap2=heatmap2.astype(np.uint8)
+    #     heatmap2=cv2.applyColorMap(heatmap2, cv2.COLORMAP_HOT)
+    #     cv2.imshow('heatmap',heatmap2)
+    #     cv2.waitKey(0)
+    return heatmap
+
+def draw_heatmap_gaussian_cylind(heatmap, center, radius, k=1, y_factor=1, rho_res=0.05*4, ang_res=0.0021*4):
     """Get gaussian masked heatmap.
 
     Args:
@@ -701,17 +816,32 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
 
     x, y = int(center[0]), int(center[1])
     
-    height, width = heatmap.shape[0:2]
+    object_rho = x * rho_res
 
+    theta_radius = int(radius * rho_res / ang_res / object_rho)
+    # print('radius: ', radius, 'theta_radius: ', theta_radius)
+    
+    # import pdb
+    # pdb.set_trace()
+
+    theta_diameter = theta_radius * 2 + 1
+
+    # print(x, diameter, theta_diameter)
+
+    # Input (rho, phi)
+    gaussian = gaussian_2d_cylind((diameter, theta_diameter), sigma=diameter / 6, 
+            rho_center=object_rho, ang_res=ang_res, rho_res=rho_res)
+
+    height, width = heatmap.shape[0:2]
     left, right = min(x, radius), min(width - x, radius + 1)
-    top, bottom = min(y, y_radius), min(height - y, y_radius + 1)
+    top, bottom = min(y, theta_radius), min(height - y, theta_radius + 1)
 
     masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
     masked_gaussian = torch.from_numpy(
-        gaussian[y_radius - top:y_radius + bottom,
+        gaussian[theta_radius - top:theta_radius + bottom,
                  radius - left:radius + right]).to(heatmap.device,
                                                    torch.float32)
-
+    
     # gaussian = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
 
     # x, y = int(center[0]), int(center[1])
@@ -734,12 +864,13 @@ def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1):
     #     print('y_factor: ', y_factor, ' y: ', y)
     #     import pdb
     #     pdb.set_trace()
-    #     import cv2
-    #     heatmap2=np.array(heatmap.cpu()) * 255
-    #     heatmap2=heatmap2.astype(np.uint8)
-    #     heatmap2=cv2.applyColorMap(heatmap2, cv2.COLORMAP_HOT)
-    #     cv2.imshow('heatmap',heatmap2)
-    #     cv2.waitKey(0)
+    # import cv2
+    # heatmap2=np.array(heatmap.cpu()) * 255
+    # heatmap2=heatmap2.astype(np.uint8)
+    # # heatmap2=cv2.applyColorMap(heatmap2, cv2.COLORMAP_HOT)
+    # cv2.imshow('heatmap',heatmap2)
+    # cv2.waitKey(0)
+
     return heatmap
 
 
