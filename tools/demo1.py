@@ -294,7 +294,8 @@ class DemoDataset(DatasetTemplate):
         gt_names = np.array(gt_names)
 
         loc, rots = gt_boxes[:, 3:6], gt_boxes[:, -1]
-        w, h, l = gt_boxes[:, 0:1], gt_boxes[:, 1:2], gt_boxes[:, 2:3]
+        loc[:, 1] += 0.5
+        w, h, l = gt_boxes[:, 0:1], gt_boxes[:, 1:2], gt_boxes[:, 2:3]  # x, w, x
         gt_boxes_camera = np.concatenate([loc, l, w, h, rots[..., np.newaxis]], axis=1).astype(np.float32)
         gt_boxes_lidar = boxes3d_kitti_camera_to_lidar(gt_boxes_camera, calib)
         
@@ -347,6 +348,8 @@ def main():
         save_path=Path(args.save_path)
     )
     logger.info(f'Total number of samples: \t{len(demo_dataset)}')
+    
+    mlab.options.offscreen = True
 
     # model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
     # model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
@@ -386,6 +389,7 @@ def main():
         print('root_path: ', demo_dataset.root_path)
         mlab.savefig(str(demo_dataset.vis_path / ('%06d.png' % frame_id)))
         print('save_path: ', str(demo_dataset.vis_path / ('%06d.png' % frame_id)))
+        mlab.close()
 
     logger.info('Demo done.')
 
