@@ -63,7 +63,9 @@ class CenterHead(nn.Module):
             kernel_size=1
         )
 
-        self.loss_cls = GaussianFocalLoss(reduction='mean')
+        self.loss_cls = GaussianFocalLoss(reduction='mean', 
+            alpha=model_cfg.get('ALPHA', 2.0), gamma=model_cfg.get('GAMMA', 4.0))
+        
 
         self.init_weights()
 
@@ -550,7 +552,7 @@ class CenterHead(nn.Module):
         #     cv2.waitKey(0)
         # import pdb
         # pdb.set_trace()
-        
+
         cls_loss = self.loss_cls(
             pred_heatmaps,
             gt_heatmaps,
