@@ -202,24 +202,24 @@ class CenterHead(nn.Module):
 
         # transpose heatmaps, because the dimension of tensors in each task is
         # different, we have to use numpy instead of torch to do the transpose.
-        import cv2
-        batch_size = heatmaps[0].shape[0]
-        for i in range(batch_size):
-            heatmap = heatmaps[0][i]
-            num_pos = heatmap.eq(1).float().sum().item()
-            print('num_pos_%d: '%i, num_pos)
+        # import cv2
+        # batch_size = heatmaps[0].shape[0]
+        # for i in range(batch_size):
+        #     heatmap = heatmaps[0][i]
+        #     num_pos = heatmap.eq(1).float().sum().item()
+        #     print('num_pos_%d: '%i, num_pos)
 
-            heatmap=np.array(heatmap.cpu()) * 255
-            heatmap=heatmap.astype(np.uint8).transpose(1, 2, 0)
+        #     heatmap=np.array(heatmap.cpu()) * 255
+        #     heatmap=heatmap.astype(np.uint8).transpose(1, 2, 0)
 
-            # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
-            cv2.imwrite('heatmap_%d_interp.png' % i,heatmap)
+        #     # heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+        #     cv2.imwrite('heatmap_%d_interp.png' % i,heatmap)
         
 
-        cv2.waitKey(0)
+        # cv2.waitKey(0)
 
-        import pdb
-        pdb.set_trace()
+        # import pdb
+        # pdb.set_trace()
 
         all_targets_dict = {
             'heatmaps': heatmaps,
@@ -426,15 +426,14 @@ class CenterHead(nn.Module):
                     #    pdb.set_trace()
                         #print('rot: ', rot, ' center_arctan: ', center_arctan, ' y: ', y)
 
-            import cv2
+            # import cv2
 
-            heatmap=np.array(heatmap.permute(1,2,0).cpu()) * 255
-            heatmap=heatmap.astype(np.uint8)
-                #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
-            cv2.imshow('heatmap',heatmap)
-            cv2.waitKey(0)
-
-            
+            # heatmap=np.array(heatmap.permute(1,2,0).cpu()) * 255
+            # heatmap=heatmap.astype(np.uint8)
+            #     #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+            # cv2.imshow('heatmap',heatmap)
+            # cv2.waitKey(0)
+     
             heatmaps.append(heatmap)
             anno_boxes.append(anno_box)
             masks.append(mask)
@@ -540,17 +539,17 @@ class CenterHead(nn.Module):
 
         # print('num_pos: ', num_pos)
  
-        import cv2
-        for i in range(gt_heatmaps.shape[0]):
-            num_pos = gt_heatmaps[i].eq(1).float().sum().item()
-            print('nun_pos %d: ' % i, num_pos)
-            heatmap=np.array(gt_heatmaps[i].permute(1,2,0).cpu()) * 255
-            heatmap=heatmap.astype(np.uint8)
-            #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
-            cv2.imshow('heatmap',heatmap)
-            cv2.waitKey(0)
-        import pdb
-        pdb.set_trace()
+        # import cv2
+        # for i in range(gt_heatmaps.shape[0]):
+        #     num_pos = gt_heatmaps[i].eq(1).float().sum().item()
+        #     print('nun_pos %d: ' % i, num_pos)
+        #     heatmap=np.array(gt_heatmaps[i].permute(1,2,0).cpu()) * 255
+        #     heatmap=heatmap.astype(np.uint8)
+        #     #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
+        #     cv2.imshow('heatmap',heatmap)
+        #     cv2.waitKey(0)
+        # import pdb
+        # pdb.set_trace()
         
         cls_loss = self.loss_cls(
             pred_heatmaps,
