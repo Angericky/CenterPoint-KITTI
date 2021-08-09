@@ -38,6 +38,7 @@ def parse_config():
     parser.add_argument('--ckpt_dir', type=str, default=None, help='specify a ckpt directory to be evaluated if needed')
     parser.add_argument('--save_to_file', action='store_true', default=False, help='')
     parser.add_argument('--unitest', action='store_true', default=False, help='')
+    parser.add_argument('--eval_by_range', action='store_true', default=False, help='')
 
     args = parser.parse_args()
 
@@ -61,7 +62,7 @@ def eval_single_ckpt(model, test_loader, args, eval_output_dir, logger, epoch_id
     # start evaluation
     eval_utils.eval_one_epoch(
         cfg, model, test_loader, epoch_id, logger, dist_test=dist_test,
-        result_dir=eval_output_dir, save_to_file=args.save_to_file, unitest=unitest
+        result_dir=eval_output_dir, save_to_file=args.save_to_file, unitest=unitest, eval_by_range=args.eval_by_range
     )
 
 

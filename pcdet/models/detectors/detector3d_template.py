@@ -213,9 +213,13 @@ class Detector3DTemplate(nn.Module):
         batch_size = batch_dict['batch_size']
         recall_dict = {}
         recall_dict_list = []
-        for i in range(3):
+        for i in range(4):
             recall_dict_list.append({})
-        pred_dicts = []
+
+        pred_dicts_near = []
+        pred_dicts_mid = []
+        pred_dicts_far = []
+        
         for index in range(batch_size):
             if batch_dict.get('batch_index', None) is not None:
                 assert batch_dict['batch_box_preds'].shape.__len__() == 2
@@ -296,12 +300,15 @@ class Detector3DTemplate(nn.Module):
                 # pdb.set_trace()
 
             range_box = torch.sqrt(final_boxes[:, 0] ** 2 + final_boxes[:, 1] ** 2)
-            
-            range_box_1 = final_boxes[range_box <= 81.2 / 3]
-            range_box_2 = final_boxes[(range_box <= 81.2 / 3 * 2) & (range_box > 81.2 / 3)]
-            range_box_3 = final_boxes[range_box > 81.2 / 3 * 2]
 
-            range_boxes = [range_box_1, range_box_2, range_box_3]
+            near_mask = (range_box <= 81.2 / 3)
+            mid_mask = ((range_box <= 81.2 / 3 * 2) & (range_box > 81.2 / 3))
+            far_mask = range_box > 81.2 / 3 * 2
+            range_box_1 = final_boxes[near_mask]
+            range_box_2 = final_boxes[mid_mask]
+            range_box_3 = final_boxes[far_mask]
+
+            range_boxes = [final_boxes, range_box_1, range_box_2, range_box_3]
 
             gt_boxes_all = batch_dict['gt_boxes'][index]
             # gt_boxes = gt_boxes_all
@@ -324,14 +331,41 @@ class Detector3DTemplate(nn.Module):
                     thresh_list=post_process_cfg.RECALL_THRESH_LIST
                 )
                 
-            record_dict = {
-                'pred_boxes': final_boxes,
-                'pred_scores': final_scores,
-                'pred_labels': final_labels
-            }
-            pred_dicts.append(record_dict)
+            # record_dict = {
+            #     'pred_boxes': final_boxes,
+            #     'pred_scores': final_scores,
+            #     'pred_labels': final_labels
+            # }
+            
+            # pred_dicts.append(record_dict)
 
-        return pred_dicts, recall_dict_list
+            record_dict_near = {
+                'pred_boxes': final_boxes[near_mask],
+                'pred_scores': final_scores[near_mask],
+                'pred_labels': final_labels[near_mask]
+            }
+            
+            pred_dicts_near.append(record_dict_near)
+
+            record_dict_mid = {
+                'pred_boxes': final_boxes[mid_mask],
+                'pred_scores': final_scores[mid_mask],
+                'pred_labels': final_labels[mid_mask]
+            }
+            
+            pred_dicts_mid.append(record_dict_mid)
+
+
+            record_dict_far = {
+                'pred_boxes': final_boxes[far_mask],
+                'pred_scores': final_scores[far_mask],
+                'pred_labels': final_labels[far_mask]
+            }
+            
+            pred_dicts_far.append(record_dict_far)
+        
+        pred_dicts_list = [pred_dicts_near, pred_dicts_mid, pred_dicts_far]
+        return pred_dicts_list, recall_dict_list
 
     @staticmethod
     def generate_recall_record(box_preds, recall_dict, batch_index, gt_boxes=None, data_dict=None, thresh_list=None):
