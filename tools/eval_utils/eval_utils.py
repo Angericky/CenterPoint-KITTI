@@ -99,7 +99,7 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
         progress_bar = tqdm.tqdm(total=len(dataloader), leave=True, desc='eval', dynamic_ncols=True)
     start_time = time.time()
 
-    det_annos_list = [[] for i in range(3)]
+    det_annos_list = [[] for i in range(4)]
 
     for i, batch_dict in enumerate(dataloader):
         load_data_to_gpu(batch_dict)
@@ -209,7 +209,6 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
             logger.info(result_str)
             ret_dict.update(result_dict)
     else:
-        metric = metric_list[0]
         gt_num_cnt = metric['gt_num']
 
         logger.info('All')
@@ -254,6 +253,7 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
         logger.info('Average predicted number of objects(%d samples): %.3f'
                     % (len(det_annos), total_pred_objects / max(1, len(det_annos))))
 
+        det_annos = det_annos_list[0]
         result_str, result_dict = dataset.evaluation(
             det_annos, class_names,
             eval_metric=cfg.MODEL.POST_PROCESSING.EVAL_METRIC,
