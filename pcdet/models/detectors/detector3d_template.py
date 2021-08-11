@@ -216,6 +216,7 @@ class Detector3DTemplate(nn.Module):
         for i in range(4):
             recall_dict_list.append({})
 
+        pred_dicts = []
         pred_dicts_near = []
         pred_dicts_mid = []
         pred_dicts_far = []
@@ -331,13 +332,13 @@ class Detector3DTemplate(nn.Module):
                     thresh_list=post_process_cfg.RECALL_THRESH_LIST
                 )
                 
-            # record_dict = {
-            #     'pred_boxes': final_boxes,
-            #     'pred_scores': final_scores,
-            #     'pred_labels': final_labels
-            # }
+            record_dict = {
+                'pred_boxes': final_boxes,
+                'pred_scores': final_scores,
+                'pred_labels': final_labels
+            }
             
-            # pred_dicts.append(record_dict)
+            pred_dicts.append(record_dict)
 
             record_dict_near = {
                 'pred_boxes': final_boxes[near_mask],
@@ -364,7 +365,7 @@ class Detector3DTemplate(nn.Module):
             
             pred_dicts_far.append(record_dict_far)
         
-        pred_dicts_list = [pred_dicts_near, pred_dicts_mid, pred_dicts_far]
+        pred_dicts_list = [pred_dicts, pred_dicts_near, pred_dicts_mid, pred_dicts_far]
         return pred_dicts_list, recall_dict_list
 
     @staticmethod
