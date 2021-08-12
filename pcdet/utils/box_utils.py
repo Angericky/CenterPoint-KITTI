@@ -37,6 +37,7 @@ def boxes_to_corners_3d(boxes3d):
         boxes3d:  (N, 7) [x, y, z, dx, dy, dz, heading], (x, y, z) is the box center
 
     Returns:
+        corners3d: (N, 8, 3)
     """
     boxes3d, is_numpy = common_utils.check_numpy_to_torch(boxes3d)
 
@@ -271,6 +272,38 @@ def boxes3d_lidar_to_aligned_bev_boxes(boxes3d):
     aligned_bev_boxes = torch.cat((boxes3d[:, 0:2] - choose_dims / 2, boxes3d[:, 0:2] + choose_dims / 2), dim=1)
     return aligned_bev_boxes
 
+def boxes3d_lidar_to_corners_bev(boxes3d):
+    """
+    Args:
+        boxes: (N, 7) (x, y, z, l, w, h, heading) in 3d coords
+    
+    Returns:
+        corners: (N, 4, 3) in bev 3d coords
+    """
+
+    center = boxes3d[:, :3]
+
+    length,wid,height = boxes3d[:, 3] / 4, boxes3d[:, 4] / 4, boxes3d[:, 5]
+    yaw = boxes3d[:, 6]
+
+    ground = center[:, 2] - height/2
+    # (3, 100)
+    A=np.stack((center[:, 0] + np.dot(length/2, np.cos(yaw)),
+                center[:, 1] + np.dot(length/2, np.sin(yaw)),ground), axis=1)
+    B=np.stack((center[:, 0] - np.dot(length/2, np.cos(yaw)),
+                center[:, 1] - np.dot(length/2, np.sin(yaw)),ground), axis=1)
+    # (3, 100)
+    A1=np.stack([A[:, 0] - np.dot(wid/2, np.sin(yaw)),
+                A[:, 1] + np.dot(wid/2, np.cos(yaw)),ground], axis=1) 
+    A2=np.stack([A[:, 0] + np.dot(wid/2, np.sin(yaw)),
+                A[:, 1] - np.dot(wid/2, np.cos(yaw)),ground], axis=1)
+    B1=np.stack([B[:, 0] + np.dot(wid/2, np.sin(yaw)),
+                B[:, 1] - np.dot(wid/2, np.cos(yaw)),ground], axis=1)
+    B2=np.stack([B[:, 0] - np.dot(wid/2, np.sin(yaw)),
+                B[:, 1] + np.dot(wid/2, np.cos(yaw)),ground], axis=1)
+    rec4points=np.stack((A1,A2,B1,B2), axis=1)
+
+    return rec4points
 
 def boxes3d_nearest_bev_iou(boxes_a, boxes_b):
     """
