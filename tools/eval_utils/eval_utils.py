@@ -133,8 +133,11 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
     if dist_test:
         rank, world_size = common_utils.get_dist_info()
         for i in range(len(det_annos_list)):
-            det_annos_list[i] = common_utils.merge_results_dist(det_annos, len(dataset), tmpdir=result_dir / 'tmpdir')
-        metric = common_utils.merge_results_dist([metric], world_size, tmpdir=result_dir / 'tmpdir')
+            det_annos_list[i] = common_utils.merge_results_dist(det_annos_list[i], len(dataset), tmpdir=result_dir / 'tmpdir')
+            if eval_by_range:
+                metric_list[i] = common_utils.merge_results_dist([metric_list[i]], world_size, tmpdir=result_dir / 'tmpdir')
+        if not eval_by_range:
+            metric = common_utils.merge_results_dist([metric], world_size, tmpdir=result_dir / 'tmpdir')
 
     logger.info('*************** Performance of EPOCH %s *****************' % epoch_id)
     sec_per_example = (time.time() - start_time) / len(dataloader.dataset)
@@ -145,11 +148,18 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
 
     ret_dict = {}
     if dist_test:
-        for key, val in metric[0].items():
-            for k in range(1, world_size):
-                metric[0][key] += metric[k][key]
-        metric = metric[0]
-
+        if not eval_by_range:
+            for key, val in metric[0].items():
+                for k in range(1, world_size):
+                    metric[0][key] += metric[k][key]
+            metric = metric[0]
+        else:
+            for i, metric in enumerate(metric_list):
+                for key, val in metric[0].items():
+                    for k in range(1, world_size):
+                        metric[0][key] += metric[k][key]
+                metric_list[i] = metric[0]
+    
     if eval_by_range:
         Range = ["All", "Near", "Mid", "Far"]
         for i in range(len(metric_list)):
