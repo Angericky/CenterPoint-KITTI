@@ -323,7 +323,10 @@ class Detector3DTemplate(nn.Module):
 
             for i, range_box in enumerate(range_boxes):
                 range_gt_box = torch.sqrt(gt_boxes_all[:, 0] ** 2 + gt_boxes_all[:, 1] ** 2)
-                gt_boxes = gt_boxes_all[(range_gt_box <= 81.2 / 3 * (i+1)) & (range_gt_box > 81.2 / 3 * i)]
+                if i > 0:
+                    gt_boxes = gt_boxes_all[(range_gt_box <= 81.2 / 3 * i) & (range_gt_box > 81.2 / 3 * (i - 1))]
+                else:
+                    gt_boxes = gt_boxes_all
 
                 recall_dict_list[i] = self.generate_recall_record(
                     box_preds=range_box if 'rois' not in batch_dict else src_box_preds,
