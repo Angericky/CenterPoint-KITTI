@@ -50,6 +50,7 @@ class DatasetTemplate(torch_data.Dataset):
         )
 
         self.num_point_features = self.point_feature_encoder.num_point_features
+
         if self.cylind_feats and self.cart_feats:
             self.num_point_features = 5
         if self.voxel_centers:
@@ -182,16 +183,18 @@ class DatasetTemplate(torch_data.Dataset):
         if self.cylind_size is not None:
             # replace 'voxels'(V, max_num, C=4) and 'voxel_coords'(V, C=3) (L, W, H)  in data_dicts
             xyz = data_dict['points'][:, :3]
+            intensity = data_dict['points'][:, 3][:, np.newaxis]
 
             xyz_pol = cart2polar(xyz)   # (N, 3)
 
-            z_feats = data_dict['points'][:, 3][:, np.newaxis]
+            z_feats = xyz[:, 2:3]
+
             if self.cart_feats and self.cylind_feats:
-                pol_feats = np.concatenate((xyz_pol[:, :2], xyz[:, :2], z_feats), axis=1)
+                pol_feats = np.concatenate((xyz_pol[:, :2], xyz[:, :2], z_feats, intensity), axis=1)
             elif self.cart_feats:
-                pol_feats = np.concatenate((xyz[:, :2], z_feats), axis=1)
+                pol_feats = np.concatenate((xyz[:, :2], z_feats, intensity), axis=1)
             elif self.cylind_feats:
-                pol_feats = np.concatenate((xyz_pol[:, :2], z_feats), axis=1)
+                pol_feats = np.concatenate((xyz_pol[:, :2], z_feats, intensity), axis=1)
 
             max_bound = np.array(self.cylind_range[3:6])
             min_bound = np.array(self.cylind_range[0:3])
