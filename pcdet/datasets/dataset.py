@@ -50,6 +50,7 @@ class DatasetTemplate(torch_data.Dataset):
         )
 
         self.num_point_features = self.point_feature_encoder.num_point_features
+        self.num_point_features += 2
 
         if self.cylind_feats and self.cart_feats:
             self.num_point_features = 5
@@ -229,14 +230,17 @@ class DatasetTemplate(torch_data.Dataset):
             # get a list of all indices of unique elements in a numpy array
             sector_feats = np.split(sorted_pol_feats, first_indexes[1:])
             voxel_max_num = 5 #data_dict['voxels'].shape[1]
-            sectors = np.zeros((unique_grid_ind.shape[0], voxel_max_num, sector_feats[0].shape[1]))
+            sectors = np.zeros((unique_grid_ind.shape[0], voxel_max_num, (sector_feats[0].shape[1]) + 2))
 
             for i in range(len(sector_feats)):
                 if sector_feats[i].shape[0] > 5:
                     grid_cnts[i] = 5
                     sectors[i, :] = sector_feats[i][np.random.choice(sector_feats[i].shape[0], 5, replace=False)]
+                    sectors[i, :, sector_feats[i].shape[1]:5] = np.expand_dims(unique_grid_ind[i, [1,0]], 0).repeat(5, 0)
                 else:
-                    sectors[i, :sector_feats[i].shape[0]] = sector_feats[i]
+                    point_num_in_sector = sector_feats[i].shape[0]
+                    sectors[i, :point_num_in_sector, :sector_feats[i].shape[1]] = sector_feats[i]
+                    sectors[i, :point_num_in_sector, sector_feats[i].shape[1]:] = np.expand_dims(unique_grid_ind[i, [1,0]], 0).repeat(point_num_in_sector, 0)
 
             #import pdb
             #pdb.set_trace()

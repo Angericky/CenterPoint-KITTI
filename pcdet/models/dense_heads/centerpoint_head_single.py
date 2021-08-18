@@ -547,8 +547,15 @@ class CenterHead(nn.Module):
                     rot = task_boxes[idx][k][6]
 
                     box_dim = task_boxes[idx][k][3:6]
-                    # box_dim = box_dim.log()
-                
+                    box_dim = box_dim.log()
+
+                    l, w, h = task_boxes[idx][k][3:6]
+                    
+                    radius = np.sqrt(l ** 2 + w ** 2)
+                    theta = np.arctan2(w, l)
+
+                    h = h.log()
+
                     if self.cylind:
                         center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1]
                         arc = phi - center_arctan
