@@ -5,6 +5,7 @@ import torch
 import math
 import numpy as np
 import torch.nn as nn
+from torch.utils import data
 from ...utils import box_coder_utils, common_utils, loss_utils, box_utils
 
 from functools import partial
@@ -36,7 +37,7 @@ def convert_lidar_coords_to_image_coords(points, W, H, pc_range_min, resolution_
     y = (points[:, 1] - pc_range_min[1]) / resolution_h
     x = x.astype(np.int)
     y = y.astype(np.int)
-    out_mask = np.logical_or(np.logical_or(np.logical_or(x >= bev.shape[0], x < 0), y >= bev.shape[1]), y < 0)
+    out_mask = np.logical_or(np.logical_or(np.logical_or(x >= bev.shape[1], x < 0), y >= bev.shape[0]), y < 0)
     
     x_index = x[~out_mask]
     y_index = y[~out_mask]
@@ -108,82 +109,132 @@ class CenterHead(nn.Module):
         )
         self.forward_ret_dict.update(targets_dict)
 
-
         ### Visualization
         # points = data_dict['points']    # (N, 5) [B, x, y, z, r]
         # batch_size = data_dict['batch_size']
 
         # cylind_range = self.cylind_range
 
-        # w, h = self.cy_grid_size[0], self.cy_grid_size[1]
-
-        # resolution_w = 0.05 * 4
-        # resolution_h = 0.0021 * 4
+        # resolution_w = 0.05 
+        # resolution_h = 0.0021 
 
         # heatmaps = self.forward_ret_dict['heatmaps'][0]
-        # H, W = heatmaps.shape[3], heatmaps.shape[2]
+        # W, H = heatmaps.shape[3] * 4, heatmaps.shape[2] * 4
         # import cv2
 
-        # bev_frames = np.zeros((heatmaps.shape[0], W, H, 3)).astype(np.float32)
+        # bev_frames = np.zeros((heatmaps.shape[0], H, W, 3)).astype(np.float64)
+        
         # bevs_cylind = bev_frames
-        # for i in range(batch_size):
-        #     pts = points[points[:, 0] == i][:, 1:5].cpu().numpy()
 
-        #     rho = np.sqrt(pts[:, 0] ** 2, pts[:, 1] ** 2) 
+        # for i in range(batch_size):
+        #     pts = points[points[:, 0] == i][:, 1:5].cpu().numpy().astype(np.float64)
+
+        #     rho = np.sqrt(pts[:, 0] ** 2 + pts[:, 1] ** 2)  
         #     theta = np.arctan2(pts[:, 1], pts[:, 0])
         #     phz = np.stack((rho, theta, pts[:, 2]), axis=1)
-            
+
         #     # generate bev map
-        #     bev = convert_lidar_coords_to_image_coords(phz, int(w/4), int(h/4), 
+        #     bev_xyz = convert_lidar_coords_to_image_coords(pts, W, H, 
+        #         np.array([0, -40]), 0.05, 0.05, color=[255, 255, 255])
+        #     bev = convert_lidar_coords_to_image_coords(phz, W, H, 
         #         cylind_range[:2], resolution_w, resolution_h, color=[255, 255, 255])
-             
+            
         #     bevs_cylind[i] = bev
         #     cv2.imshow('bev', bev)
-        #     cv2.waitKey()
+        #     # cv2.waitKey()
 
-        # bev_frames = np.zeros((heatmaps.shape[0], W, H, 3)).astype(np.float32)
+        # # New img without points
+        # # bev_frames = np.zeros((heatmaps.shape[0], W, H, 3)).astype(np.float32)
+        # bev_frames = bevs_cylind
         # for i in range(heatmaps.shape[0]):
         #     num_pos = heatmaps[i]
         #     print('num_pos %d: ' % i, num_pos)
         #     heatmap=np.array(heatmaps[i].permute(1,2,0).cpu())
-            
-        #     pos = (heatmap > 0)
-        #     bev_frames[i][pos] = heatmap[pos]
 
-        #     cv2.imshow('heatmap',heatmap)
-        #     cv2.waitKey(0)
+        #     pos = (heatmap > 0)
+
+        #     hm = np.zeros(heatmap.shape)
+        #     hm[pos] = heatmap[pos]
+
+        #     hm_tensor = torch.from_numpy(hm.transpose((2,1,0))).type(torch.FloatTensor).unsqueeze(1)
+        #     up = nn.Upsample(scale_factor=(4,4))
+        #     hm_up = up(hm_tensor)
+        #     hm_up_array = hm_up.squeeze(1).numpy().transpose((2, 1, 0))
+        #     indices = np.where(hm_up_array > 0)
+        #     bev_frames[i][indices[:2]] = hm_up_array[indices[:2]] * 255
+
+        #     # cv2.imshow('heatmap', (bev_frames[i] * 255).astype(np.uint8))
+        #     # cv2.waitKey(0)
         
         # # use box coords in xyz axis for visualization (B, max_obj, 7) [x, y, z, l, w, h, heading] # check if the dims are in order
         # gt_boxes = self.forward_ret_dict['anno_boxes_origin'][0].cpu().numpy()
-
+        # # gt_boxes = data_dict['gt_boxes'].cpu().numpy()
         # bev_corners = np.zeros((gt_boxes.shape[0], gt_boxes.shape[1], 4, 2))
         # for i, box in enumerate(gt_boxes):
         #     print(box.shape)
         #     corners_bev = box_utils.boxes3d_lidar_to_corners_bev(box)   # (M, 4, 3)
-
         #     bev_corners[i] = corners_bev[:, :, :2]
 
-        # bev_corners_img = np.zeros_like(bev_corners).astype(np.int)
-        # bev_corners_img[:, :, :, 0] = (bev_corners[:, :, :, 0] / 4 - 0) // 0.2
-        # bev_corners_img[:, :, :, 1] = (bev_corners[:, :, :, 1] / 4 - 40) // 0.2
+        # bev_corners_eight = np.zeros((gt_boxes.shape[0], gt_boxes.shape[1], 8, 2))
+        # for i, box in enumerate(gt_boxes):
+        #     print(box.shape)
+        #     corners_bev = box_utils.boxes3d_lidar_to_corners_bev(box, mode=1)   # (M, 8, 3)
+        #     bev_corners_eight[i] = corners_bev[:, :, :2]
+        # bev_corners = bev_corners_eight
+        
+        # bev_corners_in_cart = np.zeros_like(bev_corners).astype(np.int)
+        # bev_corners_in_cart[:, :, :, 0] = ((bev_corners[:, :, :, 0] - 0) / 0.05)
+        # bev_corners_in_cart[:, :, :, 1] = ((bev_corners[:, :, :, 1] + 40) / 0.05)
 
         # bev_corners_in_cylind = np.zeros_like(bev_corners).astype(np.int)   # (B, M, 4, 2)
-        # bev_corners_in_cylind[:, :, :, 0] = (np.sqrt(bev_corners[:, :, :, 0] ** 2 + bev_corners[:, :, :, 1] ** 2) - cylind_range[0]) // resolution_w
-        # bev_corners_in_cylind[:, :, :, 1] = (np.arctan2(bev_corners[:, :, :, 1], bev_corners[:, :, :, 0])  - cylind_range[1]) // resolution_h
+        # bev_corners_in_cylind[:, :, :, 0] = ((np.sqrt(bev_corners[:, :, :, 0] ** 2 + bev_corners[:, :, :, 1] ** 2) - cylind_range[0]) / resolution_w)
+        # bev_corners_in_cylind[:, :, :, 1] = ((np.arctan2(bev_corners[:, :, :, 1], bev_corners[:, :, :, 0])  - cylind_range[1]) / resolution_h)
 
-        # color = (255, 0, 0)
-        # for bev, corners in zip(bev_frames, bev_corners_in_cylind):
-        #     bev_np = bev
-        #     for corner in corners:
-        #         p0, p1, p2, p3 = corner[0], corner[1], corner[2], corner[3]     # (4, 2)
+        # color = (255, 255, 0)
 
-        #         cv2.line(bev_np, p0, p1, color, 1)
-        #         cv2.line(bev_np, p1, p2, color, 1)
-        #         cv2.line(bev_np, p2, p3, color, 1)
-        #         cv2.line(bev_np, p3, p0, color, 1)
+        # for batch_bev, batch_corners, batch_xyz_corners in zip(bev_frames, bev_corners_in_cylind, bev_corners_in_cart):
+        #     bev_np = batch_bev
+        #     for corners in batch_corners:
+        #         corners_num = batch_corners.shape[1]   # 4
+        #         for i in range(0, corners_num - 1):
+        #             cv2.line(bev_np, corners[i], corners[i + 1], color, 2)
+        #             # cv2.imshow('bev_with_box', bev_np)
+        #             # cv2.waitKey()
+        #         cv2.line(bev_np, corners[corners_num - 1], corners[0], color, 1)
 
-        #     cv2.imshow('bev_with_box', bev_np)
+        #         # p0, p1, p2, p3 = corner[0], corner[1], corner[2], corner[3]     # (4, 2)
+
+        #         # cv2.line(bev_np, p0, p1, color, 2)
+        #         # cv2.line(bev_np, p1, p2, color, 2)
+        #         # cv2.line(bev_np, p2, p3, color, 2)
+        #         # cv2.line(bev_np, p3, p0, color, 2)
+
+        #     for corners in batch_xyz_corners:
+        #         corners_num = batch_corners.shape[1]   # 4
+        #         for i in range(0, corners_num - 1):
+        #             cv2.line(bev_xyz, corners[i], corners[i + 1], color, 1)
+        #             # cv2.imshow('bev_xyz', bev_xyz)
+        #             # cv2.waitKey()
+
+        #         cv2.line(bev_xyz, corners[corners_num - 1], corners[0], color, 1)
+
+        #         # p0, p1, p2, p3 = corner[0], corner[1], corner[2], corner[3]     # (4, 2)
+
+        #         # cv2.line(bev_xyz, p0, p1, color, 2)
+        #         # cv2.line(bev_xyz, p1, p2, color, 2)
+        #         # cv2.line(bev_xyz, p2, p3, color, 2)
+        #         # cv2.line(bev_xyz, p3, p0, color, 2)
+
+        #     cv2.namedWindow('bev_with_box', cv2.WINDOW_NORMAL)
+        #     cv2.resizeWindow('bev_with_box', 1100, 1000)
+        #     cv2.imshow('bev_with_box', bev_np.astype(np.uint8))
+
+
+        #     cv2.namedWindow('bev_xyz', cv2.WINDOW_NORMAL)
+        #     cv2.resizeWindow('bev_xyz', 1100, 1000)
+        #     cv2.imshow('bev_xyz', bev_xyz.astype(np.uint8))
         #     cv2.waitKey()
+
         ### Visualization end.
 
         #flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
@@ -371,7 +422,6 @@ class CenterHead(nn.Module):
         feature_map_size = grid_size[:2] // self.target_cfg.OUT_SIZE_FACTOR
         feature_map_size = feature_map_size.to(device, dtype=torch.int32)
         
-
         """
         # reorganize the gt_dict by tasks
         task_masks = []
@@ -411,7 +461,6 @@ class CenterHead(nn.Module):
             heatmap = gt_bboxes_3d.new_zeros(
                 (len(self.class_names[idx]), feature_map_size[1],
                  feature_map_size[0]))
-            
 
             anno_box = gt_bboxes_3d.new_zeros((max_objs, self.num_reg_channels),
                                               dtype=torch.float32)
@@ -484,7 +533,8 @@ class CenterHead(nn.Module):
 
                         if y_factor < 2:
                             y_factor = 2
-                        draw_gaussian(heatmap[cls_id], center_int, radius, y_factor=y_factor, resolution=self.target_cfg.CYLIND_SIZE[:2], min_range_rho=self.cylind_range[0])
+                        draw_gaussian(heatmap[cls_id], center_int, radius, y_factor=y_factor, 
+                            resolution=self.target_cfg.CYLIND_SIZE[:2], min_range_rho=self.cylind_range[0])
                     else:
                         draw_gaussian(heatmap[cls_id], center_int, radius)
 
@@ -497,7 +547,7 @@ class CenterHead(nn.Module):
                     rot = task_boxes[idx][k][6]
 
                     box_dim = task_boxes[idx][k][3:6]
-                    box_dim = box_dim.log()
+                    # box_dim = box_dim.log()
                 
                     if self.cylind:
                         center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1]
@@ -973,7 +1023,7 @@ def draw_heatmap_gaussian_cylind(heatmap, center, radius,
     if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
         torch.max(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
 
-    # Visualization of 
+    # Visualization of heatmap
     # print('radius: {}, rho_radius: {}, theta_radius: {}'.format(radius, cy_radius_x, cy_radius_y))
     # print('gaussian shape: ', gaussian.shape)
 

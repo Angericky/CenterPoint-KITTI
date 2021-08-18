@@ -272,7 +272,7 @@ def boxes3d_lidar_to_aligned_bev_boxes(boxes3d):
     aligned_bev_boxes = torch.cat((boxes3d[:, 0:2] - choose_dims / 2, boxes3d[:, 0:2] + choose_dims / 2), dim=1)
     return aligned_bev_boxes
 
-def boxes3d_lidar_to_corners_bev(boxes3d):
+def boxes3d_lidar_to_corners_bev(boxes3d, mode=0):
     """
     Args:
         boxes: (N, 7) (x, y, z, l, w, h, heading) in 3d coords
@@ -283,25 +283,39 @@ def boxes3d_lidar_to_corners_bev(boxes3d):
 
     center = boxes3d[:, :3]
 
-    length,wid,height = boxes3d[:, 3] / 4, boxes3d[:, 4] / 4, boxes3d[:, 5]
+    length,wid,height = boxes3d[:, 3], boxes3d[:, 4], boxes3d[:, 5]
     yaw = boxes3d[:, 6]
 
     ground = center[:, 2] - height/2
-    # (3, 100)
-    A=np.stack((center[:, 0] + np.dot(length/2, np.cos(yaw)),
-                center[:, 1] + np.dot(length/2, np.sin(yaw)),ground), axis=1)
-    B=np.stack((center[:, 0] - np.dot(length/2, np.cos(yaw)),
-                center[:, 1] - np.dot(length/2, np.sin(yaw)),ground), axis=1)
-    # (3, 100)
-    A1=np.stack([A[:, 0] - np.dot(wid/2, np.sin(yaw)),
-                A[:, 1] + np.dot(wid/2, np.cos(yaw)),ground], axis=1) 
-    A2=np.stack([A[:, 0] + np.dot(wid/2, np.sin(yaw)),
-                A[:, 1] - np.dot(wid/2, np.cos(yaw)),ground], axis=1)
-    B1=np.stack([B[:, 0] + np.dot(wid/2, np.sin(yaw)),
-                B[:, 1] - np.dot(wid/2, np.cos(yaw)),ground], axis=1)
-    B2=np.stack([B[:, 0] - np.dot(wid/2, np.sin(yaw)),
-                B[:, 1] + np.dot(wid/2, np.cos(yaw)),ground], axis=1)
-    rec4points=np.stack((A1,A2,B1,B2), axis=1)
+
+    A = np.stack((center[:, 0] + np.multiply(length/2, np.cos(yaw)),
+                center[:, 1] + np.multiply(length/2, np.sin(yaw)),ground), axis=1)    # (100, 3)
+    B = np.stack((center[:, 0] - np.multiply(length/2, np.cos(yaw)),
+                center[:, 1] - np.multiply(length/2, np.sin(yaw)),ground), axis=1)    # (100, 3)
+
+    wid_x = np.multiply(wid / 2, np.sin(yaw))
+    wid_y = np.multiply(wid / 2, np.cos(yaw))
+
+    A1 = np.stack([A[:, 0] - wid_x,
+                A[:, 1] + wid_y, ground], axis=1)
+    A2 = np.stack([A[:, 0] + wid_x,
+                A[:, 1] - wid_y, ground], axis=1)
+    
+    C1 = np.stack([center[:, 0] + wid_x,
+                center[:, 1] - wid_y, ground], axis=1)
+    C2 = np.stack([center[:, 0] - wid_x,
+                center[:, 1] + wid_y, ground], axis=1)
+                
+    
+    B1 = np.stack([B[:, 0] + wid_x,
+                B[:, 1] - wid_y, ground], axis=1)
+    B2 = np.stack([B[:, 0] - wid_x,
+                B[:, 1] + wid_y, ground], axis=1)
+    
+    if mode == 0:
+        rec4points = np.stack((A1, A2, B1, B2), axis=1)
+    elif mode == 1:
+        rec4points = np.stack((A1, A, A2, C1, B1, B, B2, C2), axis=1)   # (N, 8, 3)
 
     return rec4points
 
