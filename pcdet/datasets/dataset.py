@@ -235,7 +235,7 @@ class DatasetTemplate(torch_data.Dataset):
             for i in range(len(sector_feats)):
                 if sector_feats[i].shape[0] > 5:
                     grid_cnts[i] = 5
-                    sectors[i, :] = sector_feats[i][np.random.choice(sector_feats[i].shape[0], 5, replace=False)]
+                    sectors[i, :, :sector_feats[i].shape[1]] = sector_feats[i][np.random.choice(sector_feats[i].shape[0], 5, replace=False)]
                     sectors[i, :, sector_feats[i].shape[1]:5] = np.expand_dims(unique_grid_ind[i, [1,0]], 0).repeat(5, 0)
                 else:
                     point_num_in_sector = sector_feats[i].shape[0]
