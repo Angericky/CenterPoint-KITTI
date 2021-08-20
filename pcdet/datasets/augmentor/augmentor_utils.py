@@ -76,3 +76,32 @@ def global_scaling(gt_boxes, points, scale_range):
     points[:, :3] *= noise_scale
     gt_boxes[:, :6] *= noise_scale
     return gt_boxes, points
+
+
+def global_translation(gt_boxes, points, translation_range):
+    """
+    Args:
+        gt_boxes: (N, 7), [x, y, z, dx, dy, dz, heading]
+        points: (M, 3 + C),
+        translation_range: [min, max]
+    Returns:
+    """
+    noise_translation_x = np.random.uniform(translation_range[0], translation_range[1])
+    noise_translation_y = np.random.uniform(translation_range[2], translation_range[3])
+    noise_translation_z = np.random.uniform(translation_range[4], translation_range[5])
+
+    points[:, 0] += noise_translation_x
+    gt_boxes[:, 0] += noise_translation_x
+    gt_boxes[:, 3] += noise_translation_x
+
+    points[:, 1] += noise_translation_y
+    gt_boxes[:, 1] += noise_translation_y
+    gt_boxes[:, 4] += noise_translation_y
+
+    points[:, 2] += noise_translation_z
+    gt_boxes[:, 2] += noise_translation_z
+    gt_boxes[:, 5] += noise_translation_z
+
+    return gt_boxes, points
+
+
