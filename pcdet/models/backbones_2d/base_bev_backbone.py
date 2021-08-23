@@ -153,8 +153,8 @@ class AsymmBEVBackbone(nn.Module):
 
         for idx in range(num_levels):
             cur_layers = [
-                #nn.ZeroPad2d(1),
-                ResBlock(c_in_list[idx], num_filters[idx], stride=layer_strides[idx])
+                nn.ZeroPad2d(1),
+                ResBlock(c_in_list[idx], num_filters[idx], stride=layer_strides[idx], padding=0)
             ]
 
             for k in range(layer_nums[idx]):

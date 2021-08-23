@@ -20,6 +20,7 @@ class DataAugmentor(object):
             if not isinstance(augmentor_configs, list):
                 if cur_cfg.NAME in augmentor_configs.DISABLE_AUG_LIST:
                     continue
+            print(getattr(self, cur_cfg.NAME))
             cur_augmentor = getattr(self, cur_cfg.NAME)(config=cur_cfg)
             self.data_augmentor_queue.append(cur_augmentor)
 
@@ -73,6 +74,16 @@ class DataAugmentor(object):
             return partial(self.random_world_scaling, config=config)
         gt_boxes, points = augmentor_utils.global_scaling(
             data_dict['gt_boxes'], data_dict['points'], config['WORLD_SCALE_RANGE']
+        )
+        data_dict['gt_boxes'] = gt_boxes
+        data_dict['points'] = points
+        return data_dict
+
+    def random_world_translation(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.random_world_translation, config=config)
+        gt_boxes, points = augmentor_utils.global_translation(
+            data_dict['gt_boxes'], data_dict['points'], config['WORLD_TRANSLATION_RANGE']
         )
         data_dict['gt_boxes'] = gt_boxes
         data_dict['points'] = points
