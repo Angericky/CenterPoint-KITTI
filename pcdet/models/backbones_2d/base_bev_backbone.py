@@ -29,7 +29,7 @@ class ResBlock(nn.Module):
         self.pooling = False
         if stride == 2:
             self.pool = nn.Conv2d(out_filters, out_filters, kernel_size=(3,3),
-                                stride=stride, padding=padding, bias=False)
+                                stride=stride, padding=(1,1), bias=False)
             self.pooling = True
             
         self.weight_initialization()
@@ -71,7 +71,7 @@ class UpBlock(nn.Module):
     def __init__(self, in_filters, out_filters, stride=1, kernel_size=3, indice_key=None, up_key=None):
         super(UpBlock, self).__init__()
         # self.drop_out = drop_out
-        self.trans_dilao = nn.ConvTranspose2d(in_filters, out_filters, kernel_size=(2,2), stride=stride, bias=False)
+        self.trans_dilao = nn.ConvTranspose2d(in_filters, out_filters, kernel_size=kernel_size, stride=stride, bias=False)
         self.trans_act = nn.LeakyReLU()
         self.trans_bn = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
 
@@ -168,7 +168,7 @@ class AsymmBEVBackbone(nn.Module):
                 stride = upsample_strides[idx]
                 if stride >= 1:
                     self.deblocks.append(nn.Sequential(
-                        UpBlock(num_filters[idx], num_upsample_filters[idx], stride=stride)
+                        UpBlock(num_filters[idx], num_upsample_filters[idx], kernel_size=stride, stride=stride)
                     ))
                 # else:
                 #     stride = np.round(1 / stride).astype(np.int)

@@ -4,8 +4,12 @@ DATA_CONFIG:
     _BASE_CONFIG_: tools/cfgs/dataset_configs/kitti_dataset.yaml
     #CYLIND_RANGE: [0, -1.5792, -3, 81.2, 1.5792, 1]
     #CYLIND_SIZE: [0.05, 0.0084, 0.1]
-    CYLIND_RANGE: [0, -1.5708, -3, 81.2, 1.5708, 1]
+    #CYLIND_RANGE: [0, -1.5708, -3, 81.2, 1.5708, 1]
+    #CYLIND_SIZE: [0.05, 0.0021, 0.1]
+
+    CYLIND_RANGE: [0, -1.5792, -3, 80.8, 1.5792, 1]
     CYLIND_SIZE: [0.05, 0.0021, 0.1]
+
     CYLIND_FEATS: True
 
 MODEL:
@@ -25,9 +29,9 @@ MODEL:
         NAME: AsymmBEVBackbone
 
         LAYER_NUMS: [5, 5]
-        LAYER_STRIDES: [1, 1]
+        LAYER_STRIDES: [1, 2]
         NUM_FILTERS: [128, 256]
-        UPSAMPLE_STRIDES: [1, 2]
+        UPSAMPLE_STRIDES: [2, 4]
         NUM_UPSAMPLE_FILTERS: [256, 256]
         
         # LAYER_NUMS: [3, 4]
