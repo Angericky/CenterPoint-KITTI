@@ -241,19 +241,19 @@ class CenterHead(nn.Module):
 
         ### Visualization end.
 
-        #flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
-        #batch_size = data_dict['batch_size']
-        #for i in range(batch_size):
-        #    targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.0002
+        # flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
+        # batch_size = data_dict['batch_size']
+        # for i in range(batch_size):
+        #    targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.001
         #    flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
         
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],
                 cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
-                #cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
+                # cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
             )
-            #data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
+            # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
             # print(data_dict['batch_cls_preds'][0][89219])
             data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
@@ -556,7 +556,7 @@ class CenterHead(nn.Module):
 
                 
                     if self.cylind:
-                        center_arctan = coor_y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1]
+                        center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1]
                         arc = phi - center_arctan
                         r = x * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
                         # same as arc
@@ -642,10 +642,11 @@ class CenterHead(nn.Module):
 
             rho = xs * self.target_cfg.OUT_SIZE_FACTOR * \
                 cylind_size[0] + cylind_range[0]
+            
             phi = ys * self.target_cfg.OUT_SIZE_FACTOR * \
                 cylind_size[1] + cylind_range[1]
 
-            arc_offset = batch_reg[:, :, 1:2] / rho 
+            arc_offset = batch_reg[:, :, 1:2] / rho
             phi_offset = phi + arc_offset
             
             xs = rho * torch.cos(phi_offset)
@@ -657,14 +658,13 @@ class CenterHead(nn.Module):
                 
             # center_int_rot = torch.atan2(yc, xc)
             # center_rot = torch.atan2(ys, xs)
-
             #rot = rot_rel + phi_yc
             batch_rots = box_preds[..., 6:7]
             batch_rotc = box_preds[..., 7:8]
             rot = torch.atan2(batch_rots, batch_rotc) + phi_yc
 
         else:
-            ys = ys  + batch_reg[:, :, 1:2]
+            ys = ys + batch_reg[:, :, 1:2]
             xs = xs * self.target_cfg.OUT_SIZE_FACTOR * \
                 self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
             ys = ys * self.target_cfg.OUT_SIZE_FACTOR * \
@@ -681,6 +681,8 @@ class CenterHead(nn.Module):
         # box_preds:        [0.5785,  0.2246, -0.7503,  1.3974,  0.4941,  0.4284,  2.8610]
         # batch_box_preds:  [58.8903, 16.3419, -0.7503,  4.0448,  1.6391,  1.5348,  3.1298]
         # anno_boxes:       [0.3442,  0.6907, -0.8411,  1.3056,  0.6259,  0.5128, -3.4096]
+        # targets_dict['anno_boxes_origin'][0][0][0]: [58.7808, 16.5596, -0.8411,  3.6900,  1.8700,  1.6700, -3.1408]
+        # print(data_dict['batch_box_preds'][0][89219]) [58.8759, 16.2183, -0.8411,  3.6900,  1.8700,  1.6700,  3.1366]
         #print('box: ', batch_box_preds[0][89219], ' phi: ', phi[0][89219])
         #import pdb
         #pdb.set_trace()
