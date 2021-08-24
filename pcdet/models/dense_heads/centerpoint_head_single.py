@@ -171,13 +171,13 @@ class CenterHead(nn.Module):
         # # gt_boxes = data_dict['gt_boxes'].cpu().numpy()
         # bev_corners = np.zeros((gt_boxes.shape[0], gt_boxes.shape[1], 4, 2))
         # for i, box in enumerate(gt_boxes):
-        #     print(box.shape)
+        #     # print(box.shape)
         #     corners_bev = box_utils.boxes3d_lidar_to_corners_bev(box)   # (M, 4, 3)
         #     bev_corners[i] = corners_bev[:, :, :2]
 
         # bev_corners_eight = np.zeros((gt_boxes.shape[0], gt_boxes.shape[1], 8, 2))
         # for i, box in enumerate(gt_boxes):
-        #     print(box.shape)
+        #     # print(box.shape)
         #     corners_bev = box_utils.boxes3d_lidar_to_corners_bev(box, mode=1)   # (M, 8, 3)
         #     bev_corners_eight[i] = corners_bev[:, :, :2]
         # bev_corners = bev_corners_eight
@@ -187,8 +187,12 @@ class CenterHead(nn.Module):
         # bev_corners_in_cart[:, :, :, 1] = ((bev_corners[:, :, :, 1] + 40) / 0.05)
 
         # bev_corners_in_cylind = np.zeros_like(bev_corners).astype(np.int)   # (B, M, 4, 2)
-        # bev_corners_in_cylind[:, :, :, 0] = ((np.sqrt(bev_corners[:, :, :, 0] ** 2 + bev_corners[:, :, :, 1] ** 2) - cylind_range[0]) / resolution_w)
-        # bev_corners_in_cylind[:, :, :, 1] = ((np.arctan2(bev_corners[:, :, :, 1], bev_corners[:, :, :, 0])  - cylind_range[1]) / resolution_h)
+        # bev_corners_in_cylind[:, :, :, 0] = (np.sqrt(bev_corners[:, :, :, 0] ** 2 + bev_corners[:, :, :, 1] ** 2) - cylind_range[0]) / resolution_w
+        # bev_corners_in_cylind[:, :, :, 1] = (np.arctan2(bev_corners[:, :, :, 1], bev_corners[:, :, :, 0])  - cylind_range[1]) / resolution_h
+
+        # rho_min_index = np.argmin(bev_corners_in_cylind[:, :, :, 0], axis=2)    # (B, M)
+        # corners = bev_corners_in_cylind[rho_min_index]
+ 
 
         # color = (255, 255, 0)
 
@@ -322,9 +326,10 @@ class CenterHead(nn.Module):
             anno_boxes = np.array(anno_boxes).transpose(1, 0).tolist()
             anno_boxes = [torch.stack(anno_boxes_).to(device)
                         for anno_boxes_ in anno_boxes]
-            # anno_boxes_origin = np.array(anno_boxes_origin).transpose(1, 0).tolist()
-            # anno_boxes_origin = [torch.stack(anno_boxes_).to(device)
-            #             for anno_boxes_ in anno_boxes_origin]
+
+            anno_boxes_origin = np.array(anno_boxes_origin).transpose(1, 0).tolist()
+            anno_boxes_origin = [torch.stack(anno_boxes_).to(device)
+                        for anno_boxes_ in anno_boxes_origin]
             # transpose inds
             inds = np.array(inds).transpose(1, 0).tolist()
             inds = [torch.stack(inds_).to(device) for inds_ in inds]
@@ -339,9 +344,9 @@ class CenterHead(nn.Module):
             anno_boxes = [torch.stack(anno_boxes_).to(device)
                         for anno_boxes_ in anno_boxes]
 
-            # anno_boxes_origin = [[anno_boxes_origin[0][0]]]
-            # anno_boxes_origin = [torch.stack(anno_boxes_).to(device)
-            #             for anno_boxes_ in anno_boxes_origin]
+            anno_boxes_origin = [[anno_boxes_origin[0][0]]]
+            anno_boxes_origin = [torch.stack(anno_boxes_).to(device)
+                        for anno_boxes_ in anno_boxes_origin]
 
             # transpose inds
             inds = [[inds[0][0]]]
@@ -381,7 +386,7 @@ class CenterHead(nn.Module):
             'anno_boxes': anno_boxes,
             'inds': inds,
             'masks': masks,
-            # 'anno_boxes_origin': anno_boxes_origin,
+            'anno_boxes_origin': anno_boxes_origin,
         }
 
         return all_targets_dict
@@ -551,7 +556,7 @@ class CenterHead(nn.Module):
 
                 
                     if self.cylind:
-                        center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1]
+                        center_arctan = coor_y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1]
                         arc = phi - center_arctan
                         r = x * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
                         # same as arc
@@ -587,12 +592,6 @@ class CenterHead(nn.Module):
                             torch.cos(rot).unsqueeze(0),
                         ])
 
-                    #if k == 0:
-                    #    print('rot: ', rot)
-                    #    import pdb
-                    #    pdb.set_trace()
-                        #print('rot: ', rot, ' center_arctan: ', center_arctan, ' y: ', y)
-     
             # import cv2
             # heatmap2=np.array(heatmap[0].cpu()) * 255
             # heatmap2=heatmap2.astype(np.uint8)
