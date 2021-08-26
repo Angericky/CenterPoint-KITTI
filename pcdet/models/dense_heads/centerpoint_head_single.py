@@ -597,9 +597,8 @@ class CenterHead(nn.Module):
                                         dtype=torch.float32),
                             arc * r.unsqueeze(0),
                             z.unsqueeze(0), 
-                            #corner_offset,
-                            #height_dim,
-                            box_dim,
+                            corner_offset,
+                            height_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
                         ])
@@ -741,7 +740,7 @@ class CenterHead(nn.Module):
             # import pdb
             # pdb.set_trace()
 
-            # batch_dim = torch.cat([length, width, height_dim], axis=2)
+            batch_dim = torch.cat([length, width, height_dim], axis=2)
         else:   
             box_cy = voxel_cy + batch_reg[:, :, 1:2]
             box_cx = (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * \
