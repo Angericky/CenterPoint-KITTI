@@ -141,14 +141,13 @@ class CenterHead(nn.Module):
             
         #     bevs_cylind[i] = bev
         #     cv2.imshow('bev', bev)
-        #     # cv2.waitKey()
 
         # # New img without points
         # # bev_frames = np.zeros((heatmaps.shape[0], W, H, 3)).astype(np.float32)
         # bev_frames = bevs_cylind
         # for i in range(heatmaps.shape[0]):
         #     num_pos = heatmaps[i]
-        #     print('num_pos %d: ' % i, num_pos)
+        #     # print('num_pos %d: ' % i, num_pos)
         #     heatmap=np.array(heatmaps[i].permute(1,2,0).cpu())
 
         #     pos = (heatmap > 0)
@@ -163,15 +162,13 @@ class CenterHead(nn.Module):
         #     indices = np.where(hm_up_array > 0)
         #     bev_frames[i][indices[:2]] = hm_up_array[indices[:2]] * 255
 
-        #     # cv2.imshow('heatmap', (bev_frames[i] * 255).astype(np.uint8))
-        #     # cv2.waitKey(0)
+            # cv2.imshow('heatmap', (bev_frames[i] * 255).astype(np.uint8))
+            # cv2.waitKey(0)
         
-        # # use box coords in xyz axis for visualization (B, max_obj, 7) [x, y, z, l, w, h, heading] # check if the dims are in order
+        # use box coords in xyz axis for visualization (B, max_obj, 7) [x, y, z, l, w, h, heading] # check if the dims are in order
         # gt_boxes = self.forward_ret_dict['anno_boxes_origin'][0].cpu().numpy()
-        # # gt_boxes = data_dict['gt_boxes'].cpu().numpy()
         # bev_corners = np.zeros((gt_boxes.shape[0], gt_boxes.shape[1], 4, 2))
         # for i, box in enumerate(gt_boxes):
-        #     # print(box.shape)
         #     corners_bev = box_utils.boxes3d_lidar_to_corners_bev(box)   # (M, 4, 3)
         #     bev_corners[i] = corners_bev[:, :, :2]
 
@@ -191,8 +188,7 @@ class CenterHead(nn.Module):
         # bev_corners_in_cylind[:, :, :, 1] = (np.arctan2(bev_corners[:, :, :, 1], bev_corners[:, :, :, 0])  - cylind_range[1]) / resolution_h
 
         # rho_min_index = np.argmin(bev_corners_in_cylind[:, :, :, 0], axis=2)    # (B, M)
-        # corners = bev_corners_in_cylind[rho_min_index]
- 
+        # nearest_corners = np.take_along_axis(bev_corners_in_cylind[:,:,:,:], rho_min_index[..., np.newaxis, np.newaxis], axis=2).squeeze(2)     # (B, M, 2)
 
         # color = (255, 255, 0)
 
@@ -222,13 +218,11 @@ class CenterHead(nn.Module):
 
         #         cv2.line(bev_xyz, corners[corners_num - 1], corners[0], color, 1)
 
-        #         # p0, p1, p2, p3 = corner[0], corner[1], corner[2], corner[3]     # (4, 2)
 
-        #         # cv2.line(bev_xyz, p0, p1, color, 2)
-        #         # cv2.line(bev_xyz, p1, p2, color, 2)
-        #         # cv2.line(bev_xyz, p2, p3, color, 2)
-        #         # cv2.line(bev_xyz, p3, p0, color, 2)
-
+        #     for i in range(batch_corners.shape[0]):
+        #         cv2.putText(bev_np, str(gt_boxes[0][i][-2].round(3)), nearest_corners[0][i] + 10, 1,1, (0,255,255), 2)
+        #         cv2.putText(bev_xyz, str(gt_boxes[0][i][-2].round(3)), nearest_corners[0][i] + 10, 1,1, (0,255,255), 2)
+        #         cv2.putText(bev_np, str(gt_boxes[0][i][-1].round(3)), nearest_corners[0][i], 1,1, (0,0,255), 2)
         #     cv2.namedWindow('bev_with_box', cv2.WINDOW_NORMAL)
         #     cv2.resizeWindow('bev_with_box', 1100, 1000)
         #     cv2.imshow('bev_with_box', bev_np.astype(np.uint8))
@@ -241,24 +235,27 @@ class CenterHead(nn.Module):
 
         ### Visualization end.
 
-        # flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
-        # batch_size = data_dict['batch_size']
-        # for i in range(batch_size):
-        #    targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.001
-        #    flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
+        flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
+        batch_size = data_dict['batch_size']
+        for i in range(batch_size):
+           targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.001
+           flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
         
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],
-                cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
-                # cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
+                #cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
+                cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
             )
-            # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
+            data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
             # print(data_dict['batch_cls_preds'][0][89219])
-            data_dict['batch_cls_preds'] = batch_cls_preds
+            # print(batch_box_preds[0][89219])
+            # import pdb
+            # pdb.set_trace()
+            # data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
             data_dict['cls_preds_normalized'] = False
-            #data_dict['cls_preds_normalized'] = True
+            data_dict['cls_preds_normalized'] = True
 
         return data_dict
 
@@ -470,7 +467,7 @@ class CenterHead(nn.Module):
             anno_box = gt_bboxes_3d.new_zeros((max_objs, self.num_reg_channels),
                                               dtype=torch.float32)
             
-            anno_box_origin = gt_bboxes_3d.new_zeros((max_objs, self.num_reg_channels - 1),
+            anno_box_origin = gt_bboxes_3d.new_zeros((max_objs, self.num_reg_channels),
                                     dtype=torch.float32)
 
             ind = gt_labels_3d.new_zeros((max_objs), dtype=torch.int64)
@@ -501,7 +498,7 @@ class CenterHead(nn.Module):
                     if self.cylind:
                         rho = np.sqrt(x ** 2 + y ** 2)
                         phi = np.arctan2(y, x)
-                        
+
                         coor_x = (
                             rho - cylind_range[0]
                         ) / cylind_size[0] / self.target_cfg.OUT_SIZE_FACTOR
@@ -549,37 +546,91 @@ class CenterHead(nn.Module):
                     ind[new_idx] = y * feature_map_size[0] + x
 
                     mask[new_idx] = 1
-                    rot = task_boxes[idx][k][6]
+                    heading = task_boxes[idx][k][6]
 
                     box_dim = task_boxes[idx][k][3:6]
                     box_dim = box_dim.log()
-
+                    height = task_boxes[idx][k][5:6]
+                    height_dim = height.log()
                 
                     if self.cylind:
-                        center_arctan = y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1]
+                        center_arctan = (y * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1])
                         arc = phi - center_arctan
                         r = x * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
                         # same as arc
                         # offset_arc = (center[1] - y) * (cylind_size[1] * self.target_cfg.OUT_SIZE_FACTOR)
 
-                        rot_rel = rot.unsqueeze(0) - center_arctan
+                        rot_rel = heading.unsqueeze(0) - center_arctan
+
+                        # anno_box[new_idx] = torch.cat([
+                        #     center[0: 1] -
+                        #     torch.tensor([x], device=device,
+                        #                 dtype=torch.float32),
+                        #     arc * r.unsqueeze(0),
+                        #     #center[1: 2] -
+                        #     #torch.tensor([y], device=device,
+                        #     #            dtype=torch.float32),
+                        #     z.unsqueeze(0), box_dim,
+                        #     torch.sin(rot_rel),
+                        #     torch.cos(rot_rel),
+                        # ])
+
+                        gt_box = task_boxes[idx][k:k+1] # (1,7)
+
+                        corners_bev = box_utils.boxes_to_corners_3d(gt_box)   # (1, 8, 3)
+                        bev_corners = corners_bev[0, :4, :2]
+
+                        cylind_bev_corners = torch.zeros_like(bev_corners)  # (4, 2)
+                        cylind_bev_corners[:, 0] = (torch.sqrt(bev_corners[:, 0] ** 2 + bev_corners[:, 1] ** 2) - 
+                                                    cylind_range[0]) / cylind_size[0] / self.target_cfg.OUT_SIZE_FACTOR
+                        cylind_bev_corners[:, 1] = (torch.atan2(bev_corners[:, 1], bev_corners[:, 0]) 
+                                                    - cylind_range[1]) / cylind_size[1] / self.target_cfg.OUT_SIZE_FACTOR
+
+                        nearest_index = torch.argmin(cylind_bev_corners[:, 0])    # (1)
+                        nearest_corner = cylind_bev_corners[nearest_index].squeeze(0)     # (2)
+                        corner_offset = nearest_corner - center
+                        
+                        
                         anno_box[new_idx] = torch.cat([
                             center[0: 1] -
                             torch.tensor([x], device=device,
                                         dtype=torch.float32),
                             arc * r.unsqueeze(0),
-                            #center[1: 2] -
-                            #torch.tensor([y], device=device,
-                            #            dtype=torch.float32),
-                            z.unsqueeze(0), box_dim,
+                            z.unsqueeze(0), 
+                            #corner_offset,
+                            #height_dim,
+                            box_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
                         ])
 
+                        # center[1] = arc * r / rho + center[1]
+                        # corner = corner_offset + center
+
+                        # import pdb
+                        # pdb.set_trace()
+                        # corner_rho = corner[0] * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
+                        # corner_phi = corner[1] * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1]
+                        # print('corner_rho: ', corner_rho, corner_phi)
+                        # corner_xy = torch.stack((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)))
+                        # print('corner_xy: ', corner_xy)
+                        # rotate_matrix=torch.tensor([[torch.cos(-heading), -torch.sin(-heading), 0],
+                        #         [np.sin(-heading), np.cos(-heading), 0],
+                        #         [0, 0, 1]])  # (3, 3, 3) 
+                        # trans_corner = torch.mm(rotate_matrix, 
+                        #                 torch.tensor([corner_xy[0] - task_boxes[idx][k][0], corner_xy[1] - task_boxes[idx][k][1], 1]).unsqueeze(1))
+                        # print('corner_offset: ', corner_xy[0] - task_boxes[idx][k][0], corner_xy[1] - task_boxes[idx][k][1])
+                        # print('trans_corner: ', trans_corner)
+                        # length = torch.abs(trans_corner[0] * 2)
+                        # width = torch.abs(trans_corner[1] * 2)
+                        # print('length: ', length, ' width: ', width)
+                        # print('gt:', task_boxes[idx][k][3:5])
+                        
+                        # print('rot_rel: ', rot_rel, ' heading: ', heading, 'center_arctan: ', center_arctan)
                         anno_box_origin[new_idx] = torch.cat([
                             task_boxes[idx][k][0:2],
                             z.unsqueeze(0), task_boxes[idx][k][3:6],
-                            rot.unsqueeze(0),
+                            heading.unsqueeze(0), rot_rel, 
                         ])
 
                     else:
@@ -588,8 +639,8 @@ class CenterHead(nn.Module):
                             torch.tensor([x, y], device=device,
                                         dtype=torch.float32),
                             z.unsqueeze(0), box_dim,
-                            torch.sin(rot).unsqueeze(0),
-                            torch.cos(rot).unsqueeze(0),
+                            torch.sin(heading).unsqueeze(0),
+                            torch.cos(heading).unsqueeze(0),
                         ])
 
             # import cv2
@@ -633,48 +684,76 @@ class CenterHead(nn.Module):
         yc = yc.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device).view(batch, -1, 1).float()
         xc = xc.view(1, H, W).repeat(batch, 1, 1).to(cls_preds.device).view(batch, -1, 1).float()
 
-        xs = xc.clone() + batch_reg[:, :, 0:1]
-        ys = yc.clone()
+        voxel_cx = xc.clone()
+        voxel_cy = yc.clone()
 
         if self.cylind:
             cylind_range = torch.tensor(self.cylind_range)
-            cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE)
-
-            rho = xs * self.target_cfg.OUT_SIZE_FACTOR * \
+            cylind_size = torch.tensor(self.target_cfg.CYLIND_SIZE) 
+            
+            rho = (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * \
                 cylind_size[0] + cylind_range[0]
             
-            phi = ys * self.target_cfg.OUT_SIZE_FACTOR * \
+            voxel_phi = voxel_cy * self.target_cfg.OUT_SIZE_FACTOR * \
                 cylind_size[1] + cylind_range[1]
 
-            arc_offset = batch_reg[:, :, 1:2] / rho
-            phi_offset = phi + arc_offset
+            angle_offset = batch_reg[:, :, 1:2] / rho   # in rad
+
+            phi = voxel_phi + angle_offset
+
+            box_cx = (rho * torch.cos(phi))  # (B, M, 1)
+            box_cy = (rho * torch.sin(phi))
             
-            xs = rho * torch.cos(phi_offset)
-            ys = rho * torch.sin(phi_offset)
+            # print('cx: ', box_cx[0, 89219], box_cy[0, 89219])
 
-            #rot_rel = box_preds[..., 6:7]
-            phi_yc = yc * self.target_cfg.OUT_SIZE_FACTOR * \
-                cylind_size[1] + cylind_range[1]
-                
-            # center_int_rot = torch.atan2(yc, xc)
-            # center_rot = torch.atan2(ys, xs)
-            #rot = rot_rel + phi_yc
             batch_rots = box_preds[..., 6:7]
             batch_rotc = box_preds[..., 7:8]
-            rot = torch.atan2(batch_rots, batch_rotc) + phi_yc
+            heading = torch.atan2(batch_rots, batch_rotc) + voxel_phi
+            
+            # print('===================================================')
+            # print('gen heading: ', heading[0, 89219])
 
-        else:
-            ys = ys + batch_reg[:, :, 1:2]
-            xs = xs * self.target_cfg.OUT_SIZE_FACTOR * \
+            height_dim = torch.exp(box_preds[..., 5:6])
+            
+            corner_offset = box_preds[..., 3:5]
+            corner = corner_offset
+
+            corner_rho = (corner[:, :, 0:1] + voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
+            corner_phi = (corner[:, :, 1:2] + voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
+
+            corner_xy = torch.cat((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)), axis=2).view(-1, 2)
+            # print('corner rho: ', corner_rho[0, 89219], corner_phi[0,89219])
+            ry = heading.view(-1, 1)
+
+            corner_vector = torch.stack([corner_xy[:, 0:1] - box_cx.view(-1, 1), corner_xy[:, 1:2] - box_cy.view(-1, 1) , torch.ones_like(box_cx.view(-1, 1) )], axis=1)
+
+            rotate_matrix = torch.zeros(ry.shape[0], 3, 3).to(ry.device)
+            rotate_matrix[:, 0, 0:1] = torch.cos(-ry)
+            rotate_matrix[:, 0, 1:2] = -torch.sin(-ry)
+            rotate_matrix[:, 1, 0:1] = torch.sin(-ry)
+            rotate_matrix[:, 1, 1:2] = torch.cos(-ry)
+            rotate_matrix[:, 2, 2:3] = torch.ones_like(ry)  # (B, M, 3, 3, 3) 
+
+            trans_corner = torch.bmm(rotate_matrix, corner_vector).reshape(batch, -1, 3)
+            length = torch.abs(trans_corner[:, :, 0:1] * 2)
+            width = torch.abs(trans_corner[:, :, 1:2] * 2)
+   
+            # import pdb
+            # pdb.set_trace()
+
+            # batch_dim = torch.cat([length, width, height_dim], axis=2)
+        else:   
+            box_cy = voxel_cy + batch_reg[:, :, 1:2]
+            box_cx = (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * \
                 self.target_cfg.VOXEL_SIZE[0] + self.point_cloud_range[0]
-            ys = ys * self.target_cfg.OUT_SIZE_FACTOR * \
+            box_cy = box_cy * self.target_cfg.OUT_SIZE_FACTOR * \
                 self.target_cfg.VOXEL_SIZE[1] + self.point_cloud_range[1]
         
             batch_rots = box_preds[..., 6:7]
             batch_rotc = box_preds[..., 7:8]
-            rot = torch.atan2(batch_rots, batch_rotc) 
+            heading = torch.atan2(batch_rots, batch_rotc) 
 
-        batch_box_preds = torch.cat([xs, ys, batch_hei, batch_dim, rot], dim=2)
+        batch_box_preds = torch.cat([box_cx, box_cy, batch_hei, batch_dim, heading], dim=2)
         batch_cls_preds = cls_preds.view(batch, H*W, -1)
         # 89219
         #                   xs,       ys,      batch_hei, batch_dim,               rot
@@ -711,7 +790,7 @@ class CenterHead(nn.Module):
         # import cv2
         # for i in range(gt_heatmaps.shape[0]):
         #     num_pos = gt_heatmaps[i].eq(1).float().sum().item()
-        #     print('nun_pos %d: ' % i, num_pos)
+        #     print('num_pos %d: ' % i, num_pos)
         #     heatmap=np.array(gt_heatmaps[i].permute(1,2,0).cpu()) * 255
         #     heatmap=heatmap.astype(np.uint8)
         #     #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
