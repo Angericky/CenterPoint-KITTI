@@ -581,15 +581,12 @@ class CenterHead(nn.Module):
                         bev_corners = corners_bev[0, :4, :2]
 
                         cylind_bev_corners = torch.zeros_like(bev_corners)  # (4, 2)
-                        cylind_bev_corners[:, 0] = (torch.sqrt(bev_corners[:, 0] ** 2 + bev_corners[:, 1] ** 2) - 
-                                                    cylind_range[0]) / cylind_size[0] / self.target_cfg.OUT_SIZE_FACTOR
-                        cylind_bev_corners[:, 1] = (torch.atan2(bev_corners[:, 1], bev_corners[:, 0]) 
-                                                    - cylind_range[1]) / cylind_size[1] / self.target_cfg.OUT_SIZE_FACTOR
+                        cylind_bev_corners[:, 0] = torch.sqrt(bev_corners[:, 0] ** 2 + bev_corners[:, 1] ** 2)
+                        cylind_bev_corners[:, 1] = torch.atan2(bev_corners[:, 1], bev_corners[:, 0]) 
 
                         nearest_index = torch.argmin(cylind_bev_corners[:, 0])    # (1)
                         nearest_corner = cylind_bev_corners[nearest_index].squeeze(0)     # (2)
-                        corner_offset = nearest_corner - center
-                        
+                        corner_offset = nearest_corner - torch.tensor([rho, phi])
                         
                         anno_box[new_idx] = torch.cat([
                             center[0: 1] -
@@ -597,12 +594,17 @@ class CenterHead(nn.Module):
                                         dtype=torch.float32),
                             arc * r.unsqueeze(0),
                             z.unsqueeze(0), 
-                            corner_offset,
+                            corner_offset[0:1],
+                            corner_offset[1:2],
                             height_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
                         ])
 
+                        # print('anno_box: ', anno_box[new_idx])
+
+                        # import pdb
+                        # pdb.set_trace()
                         # center[1] = arc * r / rho + center[1]
                         # corner = corner_offset + center
 
@@ -717,11 +719,13 @@ class CenterHead(nn.Module):
             corner_offset = box_preds[..., 3:5]
             corner = corner_offset
 
-            corner_rho = (corner[:, :, 0:1] + voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
-            corner_phi = (corner[:, :, 1:2] + voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
+            corner_rho = corner[:, :, 0:1] + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
+            corner_phi = corner[:, :, 1:2] + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
 
             corner_xy = torch.cat((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)), axis=2).view(-1, 2)
             # print('corner rho: ', corner_rho[0, 89219], corner_phi[0,89219])
+            # import pdb
+            # pdb.set_trace()
             ry = heading.view(-1, 1)
 
             corner_vector = torch.stack([corner_xy[:, 0:1] - box_cx.view(-1, 1), corner_xy[:, 1:2] - box_cy.view(-1, 1) , torch.ones_like(box_cx.view(-1, 1) )], axis=1)
