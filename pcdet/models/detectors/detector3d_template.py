@@ -304,6 +304,10 @@ class Detector3DTemplate(nn.Module):
                 # import pdb
                 # pdb.set_trace()
 
+            if torch.any(torch.isnan(final_boxes)):
+                import pdb
+                pdb.set_trace()
+
             gt_boxes_all = batch_dict['gt_boxes'][index]
 
             # final_boxes = gt_boxes_all[:, :7]
