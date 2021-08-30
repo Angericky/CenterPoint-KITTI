@@ -235,27 +235,27 @@ class CenterHead(nn.Module):
 
         ### Visualization end.
 
-        # flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
-        # batch_size = data_dict['batch_size']
-        # for i in range(batch_size):
-        #    targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.001
-        #    flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
+        flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
+        batch_size = data_dict['batch_size']
+        for i in range(batch_size):
+           targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.0001 
+           flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
         
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],
-                cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
-                #cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
+                #cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
+                cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
             )
-            #data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
+            data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
             # print(data_dict['batch_cls_preds'][0][89219])
             # print(batch_box_preds[0][89219])
             # import pdb
             # pdb.set_trace()
-            data_dict['batch_cls_preds'] = batch_cls_preds
+            # data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
             data_dict['cls_preds_normalized'] = False
-            # data_dict['cls_preds_normalized'] = True
+            data_dict['cls_preds_normalized'] = True
 
         return data_dict
 
@@ -316,7 +316,7 @@ class CenterHead(nn.Module):
         heatmaps, anno_boxes, inds, masks, anno_boxes_origin = multi_apply(
             self.get_targets_single, gt_bboxes_3d.to(device='cpu'), gt_labels_3d.to(device='cpu'))
 
-        if len(heatmaps) > 1: 
+        if len(heatmaps) > 1:
             heatmaps = np.array(heatmaps).transpose(1, 0).tolist()
             heatmaps = [torch.stack(hms_).to(device) for hms_ in heatmaps]
             # transpose anno_boxes
@@ -588,23 +588,26 @@ class CenterHead(nn.Module):
                         nearest_corner = cylind_bev_corners[nearest_index].squeeze(0)     # (2)
                         corner_offset = nearest_corner - torch.tensor([rho, phi])
                         
+                        corner_phi_offset = corner_offset[1:2] / self.target_cfg.OUT_SIZE_FACTOR / cylind_size[1]
+                        sigmoid_corner_phi = 1 / ( 1 + torch.exp(-corner_phi_offset)) - 0.5
                         anno_box[new_idx] = torch.cat([
                             center[0: 1] -
                             torch.tensor([x], device=device,
                                         dtype=torch.float32),
                             arc * r.unsqueeze(0),
                             z.unsqueeze(0), 
-                            corner_offset[0:1],
-                            corner_offset[1:2],
+                            (-corner_offset[0:1]).log(),
+                            sigmoid_corner_phi,
                             height_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
                         ])
 
-                        # print('anno_box: ', anno_box[new_idx])
+                        # print('anno_box: ', anno_box[new_idx][3].item(), anno_box[new_idx][4].item())
 
-                        # import pdb
-                        # pdb.set_trace()
+                        if corner_offset[0:1].item() > 0:        
+                            import pdb
+                            pdb.set_trace()
                         # center[1] = arc * r / rho + center[1]
                         # corner = corner_offset + center
 
@@ -719,8 +722,10 @@ class CenterHead(nn.Module):
             corner_offset = box_preds[..., 3:5]
             corner = corner_offset
 
-            corner_rho = corner[:, :, 0:1] + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
-            corner_phi = corner[:, :, 1:2] + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
+            sigmoid_phi = corner[:, :, 1:2] + 0.5
+            inverse_sigmoid_phi = torch.log(sigmoid_phi / (1 - sigmoid_phi))
+            corner_rho = -torch.exp(corner[:, :, 0:1]) + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
+            corner_phi = (inverse_sigmoid_phi + voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
 
             corner_xy = torch.cat((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)), axis=2).view(-1, 2)
             # print('corner rho: ', corner_rho[0, 89219], corner_phi[0,89219])
@@ -741,8 +746,6 @@ class CenterHead(nn.Module):
             length = torch.abs(trans_corner[:, :, 0:1] * 2)
             width = torch.abs(trans_corner[:, :, 1:2] * 2)
    
-            # import pdb
-            # pdb.set_trace()
 
             batch_dim = torch.cat([length, width, height_dim], axis=2)
         else:   

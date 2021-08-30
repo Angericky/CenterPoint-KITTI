@@ -231,7 +231,6 @@ class Detector3DTemplate(nn.Module):
 
             box_preds = batch_dict['batch_box_preds'][batch_mask]
             src_box_preds = box_preds
-
             if not isinstance(batch_dict['batch_cls_preds'], list):
                 cls_preds = batch_dict['batch_cls_preds'][batch_mask]
 
@@ -295,10 +294,21 @@ class Detector3DTemplate(nn.Module):
                 final_scores = selected_scores
                 final_labels = label_preds[selected]
                 final_boxes = box_preds[selected]
-                
+
+                gt_scores_index = (final_scores == 1.0)
+                final_scores = final_scores[gt_scores_index]
+                final_labels = final_labels[gt_scores_index]
+                final_boxes = final_boxes[gt_scores_index]
+
                 # print('boxes: ', final_boxes[1])
                 # import pdb
                 # pdb.set_trace()
+
+            gt_boxes_all = batch_dict['gt_boxes'][index]
+
+            # final_boxes = gt_boxes_all[:, :7]
+            # final_labels = gt_boxes_all[:, 7].type(torch.int)
+            # final_scores = torch.ones_like(final_labels)
 
             range_box = torch.sqrt(final_boxes[:, 0] ** 2 + final_boxes[:, 1] ** 2)
 
@@ -311,7 +321,7 @@ class Detector3DTemplate(nn.Module):
 
             range_boxes = [final_boxes, range_box_1, range_box_2, range_box_3]
 
-            gt_boxes_all = batch_dict['gt_boxes'][index]
+
             # gt_boxes = gt_boxes_all
 
             # recall_dict_list[i] = self.generate_recall_record(
@@ -334,7 +344,7 @@ class Detector3DTemplate(nn.Module):
                     gt_boxes=gt_boxes,
                     thresh_list=post_process_cfg.RECALL_THRESH_LIST
                 )
-                
+
             record_dict = {
                 'pred_boxes': final_boxes,
                 'pred_scores': final_scores,
