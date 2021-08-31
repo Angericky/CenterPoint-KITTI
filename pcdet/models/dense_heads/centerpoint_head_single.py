@@ -590,23 +590,29 @@ class CenterHead(nn.Module):
                         
                         corner_phi_offset = corner_offset[1:2] / self.target_cfg.OUT_SIZE_FACTOR / cylind_size[1]
 
-                        #sigmoid_corner_phi = 1 / ( 1 + torch.exp(-corner_phi_offset)) - 0.5
-                        sigmoid_corner_phi = torch.sigmoid(corner_phi_offset) - 0.5
                         anno_box[new_idx] = torch.cat([
                             center[0: 1] -
                             torch.tensor([x], device=device,
                                         dtype=torch.float32),
                             arc * r.unsqueeze(0),
                             z.unsqueeze(0), 
-                            (-corner_offset[0:1]).log(),
+                            (-corner_offset[0:1] + 1).log(),
                             #sigmoid_corner_phi,
-                            corner_phi_offset,
+                            corner_offset[1:2] * r,
                             height_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
                         ])
 
+                        # with open('phi_gt.txt', 'a+') as f:
+                        #     f.write('{}\n'.format(corner_phi_offset.item()))
 
+                        # with open('rho_gt.txt', 'a+') as f:
+                        #     f.write('{}\n'.format(corner_offset[0].item()))
+                        
+                        # with open('arc_gt.txt', 'a+') as f:
+                        #      f.write('{}\n'.format((corner_phi_offset * r * 0.0064).item()))
+                        
                         # print('anno_box: ', anno_box[new_idx][3].item(), anno_box[new_idx][4].item())
 
                         if corner_offset[0:1].item() > 0:        
@@ -726,15 +732,15 @@ class CenterHead(nn.Module):
             corner_offset = box_preds[..., 3:5]
             corner = corner_offset
 
-            sigmoid_phi = corner[:, :, 1:2] + 0.5
-            inverse_sigmoid_phi = torch.log(sigmoid_phi / (1 - sigmoid_phi))
-            corner_rho = -torch.exp(corner[:, :, 0:1]) + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
-            corner_phi = (corner[:, :, 1:2] + voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
+            #sigmoid_phi = corner[:, :, 1:2] + 0.5
+            #inverse_sigmoid_phi = torch.log(sigmoid_phi / (1 - sigmoid_phi))
+
+            corner_rho = -(torch.exp(corner[:, :, 0:1])-1) + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
+            corner_phi = corner[:, :, 1:2] / rho + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
 
             corner_xy = torch.cat((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)), axis=2).view(-1, 2)
             # print('corner rho: ', corner_rho[0, 89219], corner_phi[0,89219])
-            # import pdb
-            # pdb.set_trace()
+
             ry = heading.view(-1, 1)
 
             corner_vector = torch.stack([corner_xy[:, 0:1] - box_cx.view(-1, 1), corner_xy[:, 1:2] - box_cy.view(-1, 1) , torch.ones_like(box_cx.view(-1, 1) )], axis=1)
