@@ -615,7 +615,7 @@ class CenterHead(nn.Module):
                         
                         # print('anno_box: ', anno_box[new_idx][3].item(), anno_box[new_idx][4].item())
 
-                        if corner_offset[0:1].item() > 0:        
+                        if corner_offset[0:1].item() - 1 > 0:        
                             import pdb
                             pdb.set_trace()
                         # center[1] = arc * r / rho + center[1]
