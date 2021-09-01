@@ -886,6 +886,8 @@ class CenterHead(nn.Module):
         yaw_loss = l1_loss(
             pred[:, :, 6:], target_box[:, :, 6:], bbox_weights[:, :, 6:], avg_factor=(num + 1e-4))
 
+        # print('phi: ', target_box[:, :, 3:4])
+        # print('phi_loss: ', phi_loss.item())
         #print('x_loss: ', x_loss.item())
         #print('y_loss: ', y_loss.item())
         #print('dim_loss: ', dim_loss.item())
@@ -1127,8 +1129,8 @@ def l1_loss(pred, target, use_cosine=-1):
     assert pred.size() == target.size() and target.numel() > 0
     loss = torch.abs(pred - target)
     if pred.shape[2] == 8:
-        loss[:, :, 4] = -torch.cos(pred[:,:,4] - target[:, :, 4])
+        loss[:, :, 4] = torch.abs(torch.cos(pred[:,:,4]) - torch.cos(target[:, :, 4]))
     if use_cosine > -1:
         idx = use_cosine
-        loss[:, :, idx] = -torch.cos(pred[:,:,idx] - target[:, :, idx])
+        loss[:, :, idx] = torch.abs(torch.cos(pred[:,:,idx] - target[:, :, idx]))
     return loss
