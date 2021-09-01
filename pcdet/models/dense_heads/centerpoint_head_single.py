@@ -899,6 +899,8 @@ class CenterHead(nn.Module):
             'rpn_loss_loc': loc_loss.item(),
             'rpn_loss_yaw': yaw_loss.item(),
             'rpn_loss_dim': dim_loss.item(),
+            'rpn_loss_rho': rho_loss.item(),
+            'rpn_loss_phi': phi_loss.item(),
             'rpn_loss_xy': xy_loss.item(),
             'rpn_loss_z': z_loss.item()
         }
