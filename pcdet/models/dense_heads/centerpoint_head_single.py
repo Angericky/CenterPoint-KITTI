@@ -246,7 +246,7 @@ class CenterHead(nn.Module):
                 cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
                 #cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
             )
-            #data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
+            # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
             # print(data_dict['batch_cls_preds'][0][89219])
             # print(batch_box_preds[0][89219])
             # import pdb
@@ -597,7 +597,7 @@ class CenterHead(nn.Module):
                             z.unsqueeze(0), 
                             (-corner_offset[0:1] + 1).log(),
                             #sigmoid_corner_phi,
-                            corner_phi_offset,
+                            corner_offset[1:2],
                             height_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
@@ -735,7 +735,7 @@ class CenterHead(nn.Module):
             #inverse_sigmoid_phi = torch.log(sigmoid_phi / (1 - sigmoid_phi))
 
             corner_rho = -(torch.exp(corner[:, :, 0:1])-1) + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
-            corner_phi = (corner[:, :, 1:2] + voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
+            corner_phi = corner[:, :, 1:2] + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
 
             corner_xy = torch.cat((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)), axis=2).view(-1, 2)
             # print('corner rho: ', corner_rho[0, 89219], corner_phi[0,89219])
@@ -885,7 +885,7 @@ class CenterHead(nn.Module):
         )
         yaw_loss = l1_loss(
             pred[:, :, 6:], target_box[:, :, 6:], bbox_weights[:, :, 6:], avg_factor=(num + 1e-4))
-        
+
         #print('x_loss: ', x_loss.item())
         #print('y_loss: ', y_loss.item())
         #print('dim_loss: ', dim_loss.item())
