@@ -68,7 +68,7 @@ class CenterHead(nn.Module):
         self.forward_ret_dict = {}
         
         #self.num_reg_channels = 7 if self.cylind else 8
-        self.num_reg_channels = 8
+        self.num_reg_channels = 9
 
         self.conv_cls = nn.Conv2d(
             input_channels, self.num_class,
@@ -254,7 +254,7 @@ class CenterHead(nn.Module):
             data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
             data_dict['cls_preds_normalized'] = False
-            #data_dict['cls_preds_normalized'] = True
+            # data_dict['cls_preds_normalized'] = True
 
         return data_dict
 
@@ -466,7 +466,7 @@ class CenterHead(nn.Module):
             anno_box = gt_bboxes_3d.new_zeros((max_objs, self.num_reg_channels),
                                               dtype=torch.float32)
             
-            anno_box_origin = gt_bboxes_3d.new_zeros((max_objs, self.num_reg_channels),
+            anno_box_origin = gt_bboxes_3d.new_zeros((max_objs, 8),
                                     dtype=torch.float32)
 
             ind = gt_labels_3d.new_zeros((max_objs), dtype=torch.int64)
@@ -597,7 +597,8 @@ class CenterHead(nn.Module):
                             z.unsqueeze(0), 
                             (-corner_offset[0:1] + 1).log(),
                             #sigmoid_corner_phi,
-                            corner_offset[1:2],
+                            torch.sin(corner_offset[1:2]),
+                            torch.cos(corner_offset[1:2]),
                             height_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
@@ -613,6 +614,7 @@ class CenterHead(nn.Module):
                         #      f.write('{}\n'.format((corner_phi_offset * r * 0.0064).item()))
                         
                         # print('anno_box: ', anno_box[new_idx][3].item(), anno_box[new_idx][4].item())
+
 
                         if corner_offset[0:1].item() - 1 > 0:        
                             import pdb
@@ -719,23 +721,23 @@ class CenterHead(nn.Module):
             
             # print('cx: ', box_cx[0, 89219], box_cy[0, 89219])
 
-            batch_rots = box_preds[..., 6:7]
-            batch_rotc = box_preds[..., 7:8]
+            batch_rots = box_preds[..., 7:8]
+            batch_rotc = box_preds[..., 8:9]
             heading = torch.atan2(batch_rots, batch_rotc) + voxel_phi
             
             # print('===================================================')
             # print('gen heading: ', heading[0, 89219])
 
-            height_dim = torch.exp(box_preds[..., 5:6])
+            height_dim = torch.exp(box_preds[..., 6:7])
             
-            corner_offset = box_preds[..., 3:5]
+            corner_offset = box_preds[..., 3:6]
             corner = corner_offset
 
             #sigmoid_phi = corner[:, :, 1:2] + 0.5
             #inverse_sigmoid_phi = torch.log(sigmoid_phi / (1 - sigmoid_phi))
 
             corner_rho = -(torch.exp(corner[:, :, 0:1])-1) + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
-            corner_phi = corner[:, :, 1:2] + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
+            corner_phi = torch.atan2(corner[:, :, 1:2], corner[:, :, 2:3]) + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
 
             corner_xy = torch.cat((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)), axis=2).view(-1, 2)
             # print('corner rho: ', corner_rho[0, 89219], corner_phi[0,89219])
@@ -1128,9 +1130,9 @@ def l1_loss(pred, target, use_cosine=-1):
     """
     assert pred.size() == target.size() and target.numel() > 0
     loss = torch.abs(pred - target)
-    if pred.shape[2] == 8:
-        loss[:, :, 4] = torch.abs(torch.cos(pred[:,:,4]) - torch.cos(target[:, :, 4]))
-    if use_cosine > -1:
-        idx = use_cosine
-        loss[:, :, idx] = torch.abs(torch.cos(pred[:,:,idx] - target[:, :, idx]))
+    # if pred.shape[2] == 8:
+    #     loss[:, :, 4] = torch.abs(torch.cos(pred[:,:,4]) - torch.cos(target[:, :, 4]))
+    # if use_cosine > -1:
+    #     idx = use_cosine
+    #     loss[:, :, idx] = torch.abs(torch.cos(pred[:,:,idx] - torch.cos(target[:, :, idx])))
     return loss
