@@ -68,7 +68,7 @@ class CenterHead(nn.Module):
         self.forward_ret_dict = {}
         
         #self.num_reg_channels = 7 if self.cylind else 8
-        self.num_reg_channels = 9
+        self.num_reg_channels = 8
 
         self.conv_cls = nn.Conv2d(
             input_channels, self.num_class,
@@ -244,7 +244,7 @@ class CenterHead(nn.Module):
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],
                 cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
-                #cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
+                # cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
             )
             # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
             # print(data_dict['batch_cls_preds'][0][89219])
@@ -597,8 +597,7 @@ class CenterHead(nn.Module):
                             z.unsqueeze(0), 
                             (-corner_offset[0:1] + 1).log(),
                             #sigmoid_corner_phi,
-                            torch.sin(corner_offset[1:2]),
-                            torch.cos(corner_offset[1:2]),
+                            corner_offset[1:2],
                             height_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
@@ -721,23 +720,23 @@ class CenterHead(nn.Module):
             
             # print('cx: ', box_cx[0, 89219], box_cy[0, 89219])
 
-            batch_rots = box_preds[..., 7:8]
-            batch_rotc = box_preds[..., 8:9]
+            batch_rots = box_preds[..., 6:7]
+            batch_rotc = box_preds[..., 7:8]
             heading = torch.atan2(batch_rots, batch_rotc) + voxel_phi
             
             # print('===================================================')
             # print('gen heading: ', heading[0, 89219])
 
-            height_dim = torch.exp(box_preds[..., 6:7])
+            height_dim = torch.exp(box_preds[..., 5:6])
             
-            corner_offset = box_preds[..., 3:6]
+            corner_offset = box_preds[..., 3:5]
             corner = corner_offset
 
             #sigmoid_phi = corner[:, :, 1:2] + 0.5
             #inverse_sigmoid_phi = torch.log(sigmoid_phi / (1 - sigmoid_phi))
 
             corner_rho = -(torch.exp(corner[:, :, 0:1])-1) + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
-            corner_phi = torch.atan2(corner[:, :, 1:2], corner[:, :, 2:3]) + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
+            corner_phi = corner[:, :, 1:2] + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
 
             corner_xy = torch.cat((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)), axis=2).view(-1, 2)
             # print('corner rho: ', corner_rho[0, 89219], corner_phi[0,89219])
@@ -877,16 +876,19 @@ class CenterHead(nn.Module):
             pred[:, :, 2:3], target_box[:, :, 2:3], bbox_weights[:, :, 2:3], avg_factor=(num + 1e-4)
         )
         dim_loss = l1_loss(
-            pred[:, :, 3:6], target_box[:, :, 3:6], bbox_weights[:, :, 3:6], avg_factor=(num + 1e-4), use_cosine=1
+            pred[:, :, 3:-1], target_box[:, :, 3:-1], bbox_weights[:, :, 3:-1], avg_factor=(num + 1e-4), use_cosine=1
         )
         rho_loss = l1_loss(
             pred[:, :, 3:4], target_box[:, :, 3:4], bbox_weights[:, :, 3:4], avg_factor=(num + 1e-4)
         )
         phi_loss = l1_loss(
-            pred[:, :, 4:5], target_box[:, :, 4:5], bbox_weights[:, :, 4:5], avg_factor=(num + 1e-4), use_cosine=0
+            pred[:, :, 4:-2], target_box[:, :, 4:-2], bbox_weights[:, :, 4:-2], avg_factor=(num + 1e-4), use_cosine=0
         )
         yaw_loss = l1_loss(
-            pred[:, :, 6:], target_box[:, :, 6:], bbox_weights[:, :, 6:], avg_factor=(num + 1e-4))
+            pred[:, :, -1:], target_box[:, :, -1:], bbox_weights[:, :, -1:], avg_factor=(num + 1e-4))
+
+        # import pdb
+        # pdb.set_trace()
 
         # print('phi: ', target_box[:, :, 3:4])
         # print('phi_loss: ', phi_loss.item())
