@@ -597,21 +597,22 @@ class CenterHead(nn.Module):
                             z.unsqueeze(0), 
                             (-corner_offset[0:1] + 1).log(),
                             #sigmoid_corner_phi,
-                            corner_offset[1:2],
+                            corner_offset[1:2] * r,
                             height_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
                         ])
 
-                        # with open('phi_gt.txt', 'a+') as f:
-                        #     f.write('{}\n'.format(corner_phi_offset.item()))
+                        # with open('phi_rad_gt.txt', 'a+') as f:
+                        #     f.write('{}\n'.format(corner_offset[1].item()))
 
                         # with open('rho_gt.txt', 'a+') as f:
                         #     f.write('{}\n'.format(corner_offset[0].item()))
                         
                         # with open('arc_gt.txt', 'a+') as f:
                         #      f.write('{}\n'.format((corner_phi_offset * r * 0.0064).item()))
-                        
+                        with open('arc_gt_rad.txt', 'a+') as f:
+                             f.write('{}\n'.format((corner_offset[1:2] * r).item()))
                         # print('anno_box: ', anno_box[new_idx][3].item(), anno_box[new_idx][4].item())
 
 
@@ -736,7 +737,7 @@ class CenterHead(nn.Module):
             #inverse_sigmoid_phi = torch.log(sigmoid_phi / (1 - sigmoid_phi))
 
             corner_rho = -(torch.exp(corner[:, :, 0:1])-1) + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
-            corner_phi = corner[:, :, 1:2] + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
+            corner_phi = corner[:, :, 1:2] / rho + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
 
             corner_xy = torch.cat((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)), axis=2).view(-1, 2)
             # print('corner rho: ', corner_rho[0, 89219], corner_phi[0,89219])
@@ -866,29 +867,51 @@ class CenterHead(nn.Module):
         #target_box[:, :, 4] = - torch.cos(target_box[:, :, 4])
         #pred[:, :, 4] = - torch.cos(pred[:, :, 4])
 
-        loc_loss = l1_loss(
+        self.reg_loss_func = smooth_l1_loss
+
+        # loc_loss = l1_loss(
+        #     pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
+        
+        # xy_loss = l1_loss(
+        #     pred[:, :, 0:2], target_box[:, :, 0:2], bbox_weights[:, :, 0:2], avg_factor=(num + 1e-4)
+        # )
+        # z_loss = l1_loss(
+        #     pred[:, :, 2:3], target_box[:, :, 2:3], bbox_weights[:, :, 2:3], avg_factor=(num + 1e-4)
+        # )
+        # dim_loss = l1_loss(
+        #     pred[:, :, 3:-1], target_box[:, :, 3:-1], bbox_weights[:, :, 3:-1], avg_factor=(num + 1e-4), use_cosine=1
+        # )
+        # rho_loss = l1_loss(
+        #     pred[:, :, 3:4], target_box[:, :, 3:4], bbox_weights[:, :, 3:4], avg_factor=(num + 1e-4)
+        # )
+        # phi_loss = l1_loss(
+        #     pred[:, :, 4:-2], target_box[:, :, 4:-2], bbox_weights[:, :, 4:-2], avg_factor=(num + 1e-4), use_cosine=0
+        # )
+        # yaw_loss = l1_loss(
+        #     pred[:, :, -1:], target_box[:, :, -1:], bbox_weights[:, :, -1:], avg_factor=(num + 1e-4))
+
+
+        loc_loss = self.reg_loss_func(
             pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
         
-        xy_loss = l1_loss(
+        xy_loss = self.reg_loss_func(
             pred[:, :, 0:2], target_box[:, :, 0:2], bbox_weights[:, :, 0:2], avg_factor=(num + 1e-4)
         )
-        z_loss = l1_loss(
+        z_loss = self.reg_loss_func(
             pred[:, :, 2:3], target_box[:, :, 2:3], bbox_weights[:, :, 2:3], avg_factor=(num + 1e-4)
         )
-        dim_loss = l1_loss(
+        dim_loss = self.reg_loss_func(
             pred[:, :, 3:-1], target_box[:, :, 3:-1], bbox_weights[:, :, 3:-1], avg_factor=(num + 1e-4), use_cosine=1
         )
-        rho_loss = l1_loss(
+        rho_loss = self.reg_loss_func(
             pred[:, :, 3:4], target_box[:, :, 3:4], bbox_weights[:, :, 3:4], avg_factor=(num + 1e-4)
         )
-        phi_loss = l1_loss(
+        phi_loss = self.reg_loss_func(
             pred[:, :, 4:-2], target_box[:, :, 4:-2], bbox_weights[:, :, 4:-2], avg_factor=(num + 1e-4), use_cosine=0
         )
-        yaw_loss = l1_loss(
+        yaw_loss = self.reg_loss_func(
             pred[:, :, -1:], target_box[:, :, -1:], bbox_weights[:, :, -1:], avg_factor=(num + 1e-4))
 
-        # import pdb
-        # pdb.set_trace()
 
         # print('phi: ', target_box[:, :, 3:4])
         # print('phi_loss: ', phi_loss.item())
@@ -1137,4 +1160,23 @@ def l1_loss(pred, target, use_cosine=-1):
     # if use_cosine > -1:
     #     idx = use_cosine
     #     loss[:, :, idx] = torch.abs(torch.cos(pred[:,:,idx] - torch.cos(target[:, :, idx])))
+    return loss
+
+
+@weighted_loss
+def smooth_l1_loss(pred, target, use_cosine=-1):
+    """L1 loss.
+
+    Args:
+        pred (torch.Tensor): The prediction.
+        target (torch.Tensor): The learning target of the prediction.
+
+    Returns:
+        torch.Tensor: Calculated loss
+    """
+    assert pred.size() == target.size() and target.numel() > 0
+    diff = pred - target
+    n = torch.abs(diff)
+    beta = 1.0 / 9.0
+    loss = torch.where(n < beta, 0.5 * n ** 2 / beta, n - 0.5 * beta)
     return loss

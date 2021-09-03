@@ -295,10 +295,10 @@ class Detector3DTemplate(nn.Module):
                 final_labels = label_preds[selected]
                 final_boxes = box_preds[selected]
 
-                gt_scores_index = (final_scores == 1.0)
-                final_scores = final_scores[gt_scores_index]
-                final_labels = final_labels[gt_scores_index]
-                final_boxes = final_boxes[gt_scores_index]
+                # gt_scores_index = (final_scores == 1.0)
+                # final_scores = final_scores[gt_scores_index]
+                # final_labels = final_labels[gt_scores_index]
+                # final_boxes = final_boxes[gt_scores_index]
 
                 # print('boxes: ', final_boxes[1])
                 # import pdb
