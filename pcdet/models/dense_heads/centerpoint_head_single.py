@@ -907,10 +907,10 @@ class CenterHead(nn.Module):
             pred[:, :, 3:4], target_box[:, :, 3:4], bbox_weights[:, :, 3:4], avg_factor=(num + 1e-4)
         )
         phi_loss = self.reg_loss_func(
-            pred[:, :, 4:-2], target_box[:, :, 4:-2], bbox_weights[:, :, 4:-2], avg_factor=(num + 1e-4), use_cosine=0
+            pred[:, :, 4:-3], target_box[:, :, 4:-3], bbox_weights[:, :, 4:-3], avg_factor=(num + 1e-4), use_cosine=0
         )
         yaw_loss = self.reg_loss_func(
-            pred[:, :, -1:], target_box[:, :, -1:], bbox_weights[:, :, -1:], avg_factor=(num + 1e-4))
+            pred[:, :, -2:], target_box[:, :, -2:], bbox_weights[:, :, -2:], avg_factor=(num + 1e-4))
 
 
         # print('phi: ', target_box[:, :, 3:4])
