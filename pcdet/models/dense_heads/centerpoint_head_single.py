@@ -595,7 +595,7 @@ class CenterHead(nn.Module):
                                         dtype=torch.float32),
                             arc * r.unsqueeze(0),
                             z.unsqueeze(0), 
-                            (-corner_offset[0:1] + 1).log(),
+                            corner_offset[0:1],
                             #sigmoid_corner_phi,
                             corner_offset[1:2] * r,
                             height_dim,
@@ -736,7 +736,7 @@ class CenterHead(nn.Module):
             #sigmoid_phi = corner[:, :, 1:2] + 0.5
             #inverse_sigmoid_phi = torch.log(sigmoid_phi / (1 - sigmoid_phi))
 
-            corner_rho = -(torch.exp(corner[:, :, 0:1])-1) + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
+            corner_rho = corner[:, :, 0:1] + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
             corner_phi = corner[:, :, 1:2] / rho + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
 
             corner_xy = torch.cat((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)), axis=2).view(-1, 2)
