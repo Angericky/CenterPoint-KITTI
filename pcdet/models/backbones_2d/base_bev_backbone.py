@@ -1,3 +1,4 @@
+import pdb
 import numpy as np
 import torch
 import torch.nn as nn
@@ -9,22 +10,22 @@ class ResBlock(nn.Module):
 
         self.conv1_3x1 = nn.Conv2d(in_filters, out_filters, kernel_size=(3,1),stride=1, padding=(padding,0), bias=False)
         self.bn1_1 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
-        self.relu1_1 = nn.ReLU()
+        self.relu1_1 = nn.LeakyReLU()
 
         self.conv1_1x3 = nn.Conv2d(out_filters, out_filters, kernel_size=(1,3),
                         stride=1, padding=(0, padding), bias=False)
         self.bn1_2 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
-        self.relu1_2 = nn.ReLU()
+        self.relu1_2 = nn.LeakyReLU()
 
         self.conv2_3x1 = nn.Conv2d(out_filters, out_filters, kernel_size=(3,1),
                         stride=1, padding=(padding, 0), bias=False)
         self.bn2_1 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
-        self.relu2_1 = nn.ReLU()
+        self.relu2_1 = nn.LeakyReLU()
 
         self.conv2_1x3 = nn.Conv2d(in_filters, out_filters, kernel_size=(1,3),
                         stride=1, padding=(0, padding), bias=False)
         self.bn2_2 = nn.BatchNorm2d(out_filters, eps=1e-3, momentum=0.01)
-        self.relu2_2 = nn.ReLU()
+        self.relu2_2 = nn.LeakyReLU()
         
         self.pooling = False
         if stride == 2:
@@ -42,21 +43,20 @@ class ResBlock(nn.Module):
 
     def forward(self, x, **args):
         shortcut = self.conv1_3x1(x)
-
-        shortcut = self.bn1_1(shortcut)
         shortcut = self.relu1_1(shortcut)
+        shortcut = self.bn1_1(shortcut)
 
         shortcut = self.conv1_1x3(shortcut)
-        shortcut = self.bn1_2(shortcut)
         shortcut = self.relu1_2(shortcut)
+        shortcut = self.bn1_2(shortcut)
 
         res = self.conv2_1x3(x)
-        res = self.bn2_1(res)
         res = self.relu2_1(res)
+        res = self.bn2_1(res)
 
         res = self.conv2_3x1(res)
-        res = self.bn2_2(res)
         res = self.relu2_2(res)
+        res = self.bn2_2(res)
 
         res = res + shortcut
         
