@@ -43,20 +43,20 @@ class ResBlock(nn.Module):
 
     def forward(self, x, **args):
         shortcut = self.conv1_3x1(x)
-        shortcut = self.relu1_1(shortcut)
         shortcut = self.bn1_1(shortcut)
+        shortcut = self.relu1_1(shortcut)
 
         shortcut = self.conv1_1x3(shortcut)
-        shortcut = self.relu1_2(shortcut)
         shortcut = self.bn1_2(shortcut)
+        shortcut = self.relu1_2(shortcut)
 
         res = self.conv2_1x3(x)
-        res = self.relu2_1(res)
         res = self.bn2_1(res)
+        res = self.relu2_1(res)
 
         res = self.conv2_3x1(res)
-        res = self.relu2_2(res)
         res = self.bn2_2(res)
+        res = self.relu2_2(res)
 
         res = res + shortcut
         
@@ -101,23 +101,23 @@ class UpBlock(nn.Module):
 
     def forward(self, x):
         upA = self.trans_dilao(x)
-        upA = self.trans_act(upA)
         upA = self.trans_bn(upA)
+        upA = self.trans_act(upA)
 
         # upsample
         #upA = self.up_subm(upA)
 
         upE = self.conv1(upA)
-        upE = self.act1(upE)
         upE = self.bn1(upE)
+        upE = self.act1(upE)
 
         upE = self.conv2(upE)
-        upE = self.act2(upE)
         upE = self.bn2(upE)
+        upE = self.act2(upE)
 
         upE = self.conv3(upE)
-        upE = self.act3(upE)
         upE = self.bn3(upE)
+        upE = self.act3(upE)
 
         return upE
     
