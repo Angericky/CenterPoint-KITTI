@@ -235,24 +235,24 @@ class CenterHead(nn.Module):
 
         ### Visualization end.
 
-        flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
-        batch_size = data_dict['batch_size']
-        for i in range(batch_size):
-           targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.001
-           flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
+        # flat_box_preds = box_preds.view(box_preds.shape[0], -1, box_preds.shape[-1]).clone()
+        # batch_size = data_dict['batch_size']
+        # for i in range(batch_size):
+        #    targets_dict['anno_boxes'][0][i][..., -1] = targets_dict['anno_boxes'][0][i][..., -1] + 0.001
+        #    flat_box_preds[i, targets_dict['inds'][0][i]] = targets_dict['anno_boxes'][0][i]
         
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],
-                #cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
-                cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
+                cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
+                #cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
             )
-            data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
+            # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
             # print(data_dict['batch_cls_preds'][0][89219])
             # print(batch_box_preds[0][89219])
             # import pdb
             # pdb.set_trace()
-            # data_dict['batch_cls_preds'] = batch_cls_preds
+            data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
             data_dict['cls_preds_normalized'] = False
             data_dict['cls_preds_normalized'] = True

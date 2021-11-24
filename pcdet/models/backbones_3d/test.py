@@ -240,17 +240,13 @@ class Asymm_3d_spconv(nn.Module):
             # [1624, 1496, 41] <- [812, 748, 21]
 
             self.conv1 = spconv.SparseSequential(
-                subm_block(init_size, init_size, 3, padding=1, indice_key='subm1'),
-                subm_block(init_size, init_size, 3, padding=1, indice_key='subm1')
-                # ResBlock(init_size, init_size, pooling=False, indice_key="subm1"),
-                # ResBlock(init_size, init_size, pooling=False, indice_key="subm1"),
+                subm_block(init_size, init_size, 3, padding=1, indice_key='subm2'),
+                subm_block(init_size, init_size, 3, padding=1, indice_key='subm2')
             )
             # [1600, 1408, 41] <- [800, 704, 21]
             
             self.conv2 = spconv.SparseSequential(
                 ResBlock(init_size, 2 * init_size, indice_key="down2"),
-                # ResBlock(2 * init_size, 2 * init_size, pooling=False, indice_key="subm2"),
-                # ResBlock(2 * init_size, 2 * init_size, pooling=False, indice_key="subm2"),
                 subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
                 subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
             )
@@ -260,8 +256,6 @@ class Asymm_3d_spconv(nn.Module):
             
             self.conv3 = spconv.SparseSequential(
                 ResBlock(2 * init_size, 4 * init_size, indice_key="down3"),
-                # ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
-                # ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
                 subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
                 subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
             )
@@ -270,8 +264,6 @@ class Asymm_3d_spconv(nn.Module):
             # [400, 352, 11] <- [200, 352, 5]s
             self.conv4 = spconv.SparseSequential(
                 ResBlock(4 * init_size, 8 * init_size, padding=(0, 1, 1), indice_key="down4"),
-                # ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
-                # ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
                 subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
                 subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
             )
