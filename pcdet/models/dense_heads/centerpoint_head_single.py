@@ -2,11 +2,10 @@ import functools
 import pdb
 import torch.nn.functional as F
 import torch
-import math
 import numpy as np
 import torch.nn as nn
 from torch.utils import data
-from ...utils import box_coder_utils, common_utils, loss_utils, box_utils
+from ...utils import box_coder_utils, common_utils, loss_utils, box_utils, heatmap_utils
 
 from functools import partial
 from six.moves import map, zip
@@ -245,7 +244,7 @@ class CenterHead(nn.Module):
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],
                 cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=None
-                #cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
+                # cls_preds=cls_preds, box_preds=flat_box_preds.view(box_preds.shape), dir_cls_preds=None
             )
             # data_dict['batch_cls_preds'] = targets_dict['heatmaps'][0].view(batch_size, 3, -1).permute(0, 2, 1)
             # print(data_dict['batch_cls_preds'][0][89219])
@@ -255,7 +254,7 @@ class CenterHead(nn.Module):
             data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
             data_dict['cls_preds_normalized'] = False
-            data_dict['cls_preds_normalized'] = True
+            # data_dict['cls_preds_normalized'] = True
 
         return data_dict
 
@@ -316,7 +315,7 @@ class CenterHead(nn.Module):
         heatmaps, anno_boxes, inds, masks, anno_boxes_origin = multi_apply(
             self.get_targets_single, gt_bboxes_3d.to(device='cpu'), gt_labels_3d.to(device='cpu'))
 
-        if len(heatmaps) > 1: 
+        if len(heatmaps) > 1:
             heatmaps = np.array(heatmaps).transpose(1, 0).tolist()
             heatmaps = [torch.stack(hms_).to(device) for hms_ in heatmaps]
             # transpose anno_boxes
@@ -456,7 +455,7 @@ class CenterHead(nn.Module):
         task_boxes = [gt_bboxes_3d]
         task_classes = [gt_labels_3d]
         
-        draw_gaussian = draw_heatmap_gaussian_cylind if self.cylind else draw_heatmap_gaussian
+        draw_gaussian = heatmap_utils.draw_heatmap_gaussian_cylind if self.cylind else heatmap_utils.draw_heatmap_gaussian
         heatmaps, anno_boxes, inds, masks, anno_boxes_origin = [], [], [], [], []
 
         for idx in range(1):
@@ -467,7 +466,7 @@ class CenterHead(nn.Module):
             anno_box = gt_bboxes_3d.new_zeros((max_objs, self.num_reg_channels),
                                               dtype=torch.float32)
             
-            anno_box_origin = gt_bboxes_3d.new_zeros((max_objs, self.num_reg_channels),
+            anno_box_origin = gt_bboxes_3d.new_zeros((max_objs, 8),
                                     dtype=torch.float32)
 
             ind = gt_labels_3d.new_zeros((max_objs), dtype=torch.int64)
@@ -485,7 +484,7 @@ class CenterHead(nn.Module):
                     self.target_cfg.OUT_SIZE_FACTOR
 
                 if width > 0 and length > 0:
-                    radius = gaussian_radius((length, width), min_overlap=self.target_cfg.GAUSSIAN_OVERLAP)
+                    radius = heatmap_utils.gaussian_radius((length, width), min_overlap=self.target_cfg.GAUSSIAN_OVERLAP)
                     radius = max(self.target_cfg.MIN_RADIUS, int(radius))
                     # if self.target_cfg.MIN_RADIUS < int(radius):
                     #     import pdb
@@ -581,28 +580,45 @@ class CenterHead(nn.Module):
                         bev_corners = corners_bev[0, :4, :2]
 
                         cylind_bev_corners = torch.zeros_like(bev_corners)  # (4, 2)
-                        cylind_bev_corners[:, 0] = (torch.sqrt(bev_corners[:, 0] ** 2 + bev_corners[:, 1] ** 2) - 
-                                                    cylind_range[0]) / cylind_size[0] / self.target_cfg.OUT_SIZE_FACTOR
-                        cylind_bev_corners[:, 1] = (torch.atan2(bev_corners[:, 1], bev_corners[:, 0]) 
-                                                    - cylind_range[1]) / cylind_size[1] / self.target_cfg.OUT_SIZE_FACTOR
+                        cylind_bev_corners[:, 0] = torch.sqrt(bev_corners[:, 0] ** 2 + bev_corners[:, 1] ** 2)
+                        cylind_bev_corners[:, 1] = torch.atan2(bev_corners[:, 1], bev_corners[:, 0]) 
 
                         nearest_index = torch.argmin(cylind_bev_corners[:, 0])    # (1)
                         nearest_corner = cylind_bev_corners[nearest_index].squeeze(0)     # (2)
-                        corner_offset = nearest_corner - center
+                        corner_offset = nearest_corner - torch.tensor([rho, phi])
                         
-                        
+                        corner_phi_offset = corner_offset[1:2] / self.target_cfg.OUT_SIZE_FACTOR / cylind_size[1]
+
                         anno_box[new_idx] = torch.cat([
                             center[0: 1] -
                             torch.tensor([x], device=device,
                                         dtype=torch.float32),
                             arc * r.unsqueeze(0),
                             z.unsqueeze(0), 
-                            corner_offset,
+                            (-corner_offset[0:1] + 1).log(),
+                            #sigmoid_corner_phi,
+                            corner_offset[1:2] * r,
                             height_dim,
                             torch.sin(rot_rel),
                             torch.cos(rot_rel),
                         ])
 
+                        # with open('phi_rad_gt.txt', 'a+') as f:
+                        #     f.write('{}\n'.format(corner_offset[1].item()))
+
+                        # with open('rho_gt.txt', 'a+') as f:
+                        #     f.write('{}\n'.format(corner_offset[0].item()))
+                        
+                        # with open('arc_gt.txt', 'a+') as f:
+                        #      f.write('{}\n'.format((corner_phi_offset * r * 0.0064).item()))
+                        with open('arc_gt_rad.txt', 'a+') as f:
+                             f.write('{}\n'.format((corner_offset[1:2] * r).item()))
+                        # print('anno_box: ', anno_box[new_idx][3].item(), anno_box[new_idx][4].item())
+
+
+                        if corner_offset[0:1].item() - 1 > 0:        
+                            import pdb
+                            pdb.set_trace()
                         # center[1] = arc * r / rho + center[1]
                         # corner = corner_offset + center
 
@@ -717,11 +733,15 @@ class CenterHead(nn.Module):
             corner_offset = box_preds[..., 3:5]
             corner = corner_offset
 
-            corner_rho = (corner[:, :, 0:1] + voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
-            corner_phi = (corner[:, :, 1:2] + voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
+            #sigmoid_phi = corner[:, :, 1:2] + 0.5
+            #inverse_sigmoid_phi = torch.log(sigmoid_phi / (1 - sigmoid_phi))
+
+            corner_rho = -(torch.exp(corner[:, :, 0:1])-1) + (voxel_cx + batch_reg[:, :, 0:1]) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[0] + cylind_range[0]
+            corner_phi = corner[:, :, 1:2] / rho + (voxel_cy) * self.target_cfg.OUT_SIZE_FACTOR * cylind_size[1] + cylind_range[1] + angle_offset
 
             corner_xy = torch.cat((corner_rho * torch.cos(corner_phi), corner_rho * torch.sin(corner_phi)), axis=2).view(-1, 2)
             # print('corner rho: ', corner_rho[0, 89219], corner_phi[0,89219])
+
             ry = heading.view(-1, 1)
 
             corner_vector = torch.stack([corner_xy[:, 0:1] - box_cx.view(-1, 1), corner_xy[:, 1:2] - box_cy.view(-1, 1) , torch.ones_like(box_cx.view(-1, 1) )], axis=1)
@@ -737,8 +757,6 @@ class CenterHead(nn.Module):
             length = torch.abs(trans_corner[:, :, 0:1] * 2)
             width = torch.abs(trans_corner[:, :, 1:2] * 2)
    
-            # import pdb
-            # pdb.set_trace()
 
             batch_dim = torch.cat([length, width, height_dim], axis=2)
         else:   
@@ -846,21 +864,57 @@ class CenterHead(nn.Module):
 
         # rcnn_loss_reg = (rcnn_loss_reg.view(rcnn_batch_size, -1) * fg_mask.unsqueeze(dim=-1).float()).sum() / max(fg_sum, 1)
         
-        loc_loss = l1_loss(
+        #target_box[:, :, 4] = - torch.cos(target_box[:, :, 4])
+        #pred[:, :, 4] = - torch.cos(pred[:, :, 4])
+
+        self.reg_loss_func = smooth_l1_loss
+
+        # loc_loss = l1_loss(
+        #     pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
+        
+        # xy_loss = l1_loss(
+        #     pred[:, :, 0:2], target_box[:, :, 0:2], bbox_weights[:, :, 0:2], avg_factor=(num + 1e-4)
+        # )
+        # z_loss = l1_loss(
+        #     pred[:, :, 2:3], target_box[:, :, 2:3], bbox_weights[:, :, 2:3], avg_factor=(num + 1e-4)
+        # )
+        # dim_loss = l1_loss(
+        #     pred[:, :, 3:-1], target_box[:, :, 3:-1], bbox_weights[:, :, 3:-1], avg_factor=(num + 1e-4), use_cosine=1
+        # )
+        # rho_loss = l1_loss(
+        #     pred[:, :, 3:4], target_box[:, :, 3:4], bbox_weights[:, :, 3:4], avg_factor=(num + 1e-4)
+        # )
+        # phi_loss = l1_loss(
+        #     pred[:, :, 4:-2], target_box[:, :, 4:-2], bbox_weights[:, :, 4:-2], avg_factor=(num + 1e-4), use_cosine=0
+        # )
+        # yaw_loss = l1_loss(
+        #     pred[:, :, -1:], target_box[:, :, -1:], bbox_weights[:, :, -1:], avg_factor=(num + 1e-4))
+
+
+        loc_loss = self.reg_loss_func(
             pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
         
-        xy_loss = l1_loss(
+        xy_loss = self.reg_loss_func(
             pred[:, :, 0:2], target_box[:, :, 0:2], bbox_weights[:, :, 0:2], avg_factor=(num + 1e-4)
         )
-        z_loss = l1_loss(
+        z_loss = self.reg_loss_func(
             pred[:, :, 2:3], target_box[:, :, 2:3], bbox_weights[:, :, 2:3], avg_factor=(num + 1e-4)
         )
-        dim_loss = l1_loss(
-            pred[:, :, 3:6], target_box[:, :, 3:6], bbox_weights[:, :, 3:6], avg_factor=(num + 1e-4)
+        dim_loss = self.reg_loss_func(
+            pred[:, :, 3:-1], target_box[:, :, 3:-1], bbox_weights[:, :, 3:-1], avg_factor=(num + 1e-4), use_cosine=1
         )
-        yaw_loss = l1_loss(
-            pred[:, :, 6:], target_box[:, :, 6:], bbox_weights[:, :, 6:], avg_factor=(num + 1e-4))
-        
+        rho_loss = self.reg_loss_func(
+            pred[:, :, 3:4], target_box[:, :, 3:4], bbox_weights[:, :, 3:4], avg_factor=(num + 1e-4)
+        )
+        phi_loss = self.reg_loss_func(
+            pred[:, :, 4:-3], target_box[:, :, 4:-3], bbox_weights[:, :, 4:-3], avg_factor=(num + 1e-4), use_cosine=0
+        )
+        yaw_loss = self.reg_loss_func(
+            pred[:, :, -2:], target_box[:, :, -2:], bbox_weights[:, :, -2:], avg_factor=(num + 1e-4))
+
+
+        # print('phi: ', target_box[:, :, 3:4])
+        # print('phi_loss: ', phi_loss.item())
         #print('x_loss: ', x_loss.item())
         #print('y_loss: ', y_loss.item())
         #print('dim_loss: ', dim_loss.item())
@@ -874,6 +928,8 @@ class CenterHead(nn.Module):
             'rpn_loss_loc': loc_loss.item(),
             'rpn_loss_yaw': yaw_loss.item(),
             'rpn_loss_dim': dim_loss.item(),
+            'rpn_loss_rho': rho_loss.item(),
+            'rpn_loss_phi': phi_loss.item(),
             'rpn_loss_xy': xy_loss.item(),
             'rpn_loss_z': z_loss.item()
         }
@@ -900,253 +956,6 @@ def clip_sigmoid(x, eps=1e-4):
     y = torch.clamp(x.sigmoid_(), min=eps, max=1 - eps)
     return y
 
-
-def gaussian_2d(shape, sigma=1, sigma2=None):
-    """Generate gaussian map.
-
-    Args:
-        shape (list[int]): Shape of the map.
-        sigma (float): Sigma to generate gaussian map.
-            Defaults to 1.
-
-    Returns:
-        np.ndarray: Generated gaussian map.
-    """
-    m, n = [(ss - 1.) / 2. for ss in shape]
-    y, x = np.ogrid[-m:m + 1, -n:n + 1]
-
-    if sigma2 is not None:
-        sigma1 = sigma
-        sigma2 = sigma2
-        h = np.exp(-(x * x  / (2 * sigma1 * sigma1) + y * y / (2 * sigma2 * sigma2)))
-    else:
-        h = np.exp(-(x * x + y * y) / (2 * sigma * sigma))
-    h[h < np.finfo(h.dtype).eps * h.max()] = 0
-    return h
-
-
-def gaussian_2d_cylind(shape, center, resolution, scale, sigma=1, min_range_rho=0):
-    """Generate gaussian map.
-
-    Args:
-        shape (list[int]): Shape of the map. [y, x]
-        sigma (float): Sigma to generate gaussian map.
-            Defaults to 1.
-
-    Returns:
-        np.ndarray: Generated gaussian map. [rho, phi]
-    """
-    m, n = [(ss - 1.) / 2. for ss in shape]
-    y, x = np.ogrid[-m:m + 1, -n:n + 1]
-    
-    rho_res, theta_res = resolution[0], resolution[1]
-    rho = (x + center[0]) * rho_res * scale + min_range_rho
-    theta_offset = y * theta_res * scale
-    # h = np.exp(-(rho_center * rho_center + (rho_center + rho_offset) ** 2 
-    #     - 2 * rho_center * (rho_center + rho_offset) * np.cos(theta_offset) ) / (2 * sigma * sigma))
-    
-    rho_center = rho[:, (shape[1] - 1) // 2]
-
-    distance_square = rho ** 2 + rho_center ** 2 - 2 * rho * rho_center * np.cos(theta_offset)
-
-    h = np.exp(-(distance_square / ((rho_res * scale) ** 2) / (2 * sigma * sigma)))
-
-    h[h < np.finfo(h.dtype).eps * h.max()] = 0
-
-    return h
-
-
-def draw_heatmap_gaussian(heatmap, center, radius, k=1, y_factor=1, resolution=[0.05, 0.0021], scale=4):
-    """Get gaussian masked heatmap.
-
-    Args:
-        heatmap (torch.Tensor): Heatmap to be masked. shape (phi, rho)
-        center (torch.Tensor): Center coord of the heatmap.
-        radius (int): Radius of gausian.
-        K (int): Multiple of masked_gaussian. Defaults to 1.
-
-    Returns:
-        torch.Tensor: Masked heatmap.
-    """
-    diameter = 2 * radius + 1
-    try:
-        y_radius = int(((radius * y_factor).floor().item()))
-    except:
-        y_radius = radius
-    y_diameter = 2 * y_radius + 1
-    # gaussian_center = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
-
-    # index = np.linspace(0, diameter - 1, diameter, endpoint=True)
-    # y_index = radius  / (y_radius + 1) * np.linspace(0, y_radius + 1, y_radius + 1, endpoint=True)
-    # gaussian = np.zeros((y_diameter, diameter))
-
-    # for i in range(gaussian_center.shape[0]):
-    #     gaussian_half = np.interp(y_index, index, gaussian_center[i])
-    #     gaussian[:, i] = np.concatenate((gaussian_half, gaussian_half[:-1][::-1]), axis=0)
-
-    gaussian = gaussian_2d((y_diameter, diameter), sigma=diameter / 6, sigma2 = y_diameter / 6)
-
-    x, y = int(center[0]), int(center[1])
-    
-    height, width = heatmap.shape[0:2]
-
-    left, right = min(x, radius), min(width - x, radius + 1)
-    top, bottom = min(y, y_radius), min(height - y, y_radius + 1)
-
-    masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
-    masked_gaussian = torch.from_numpy(
-        gaussian[y_radius - top:y_radius + bottom,
-                 radius - left:radius + right]).to(heatmap.device,
-                                                   torch.float32)
-    
-    # gaussian = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
-
-    # x, y = int(center[0]), int(center[1])
-    
-    # height, width = heatmap.shape[0:2]
-
-    # left, right = min(x, radius), min(width - x, radius + 1)
-    # top, bottom = min(y, radius), min(height - y, radius + 1)
-
-    # masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
-    # masked_gaussian = torch.from_numpy(
-    #     gaussian[radius - top:radius + bottom,
-    #              radius - left:radius + right]).to(heatmap.device,
-    #                                                torch.float32) 
-
-    if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
-        torch.max(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
-    # if radius != y_radius:
-    #     print('radius: ', radius, ' y_radius: ', y_radius)
-    #     print('y_factor: ', y_factor, ' y: ', y)
-    #     import pdb
-    #     pdb.set_trace()
-    #     import cv2
-    #     heatmap2=np.array(heatmap.cpu()) * 255
-    #     heatmap2=heatmap2.astype(np.uint8)
-    #     heatmap2=cv2.applyColorMap(heatmap2, cv2.COLORMAP_HOT)
-    #     cv2.imshow('heatmap',heatmap2)
-    #     cv2.waitKey(0)
-    return heatmap
-
-
-
-def draw_heatmap_gaussian_cylind(heatmap, center, radius, 
-    k=1, y_factor=1, resolution=[0.05, 0.0021], scale=4, min_range_rho=0):
-    """Get gaussian masked heatmap.
-
-    Args:
-        heatmap (torch.Tensor): Heatmap to be masked. shape (phi, rho)
-        center (torch.Tensor): Center coord of the heatmap.
-        radius (int): Radius of gausian.
-        K (int): Multiple of masked_gaussian. Defaults to 1.
-
-    Returns:
-        torch.Tensor: Masked heatmap.
-    """
-    diameter = 2 * radius + 1
-    try:
-        y_radius = int(((radius * y_factor).floor().item()))
-    except:
-        y_radius = radius
-    y_diameter = 2 * y_radius + 1
-    # gaussian_center = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
-
-    # index = np.linspace(0, diameter - 1, diameter, endpoint=True)
-    # y_index = radius  / (y_radius + 1) * np.linspace(0, y_radius + 1, y_radius + 1, endpoint=True)
-    # gaussian = np.zeros((y_diameter, diameter))
-
-    # for i in range(gaussian_center.shape[0]):
-    #     gaussian_half = np.interp(y_index, index, gaussian_center[i])
-    #     gaussian[:, i] = np.concatenate((gaussian_half, gaussian_half[:-1][::-1]), axis=0)
-
-    # 2-dim gaussian distribution
-    gaussian = gaussian_2d((y_diameter, diameter), sigma=diameter / 6, sigma2 = y_diameter / 6)
-
-    x, y = int(center[0]), int(center[1])
-    
-    height, width = heatmap.shape[0:2]
-    
-    # gaussian = gaussian_2d((diameter, diameter), sigma=diameter / 6).transpose(1, 0)
-
-    # x, y = int(center[0]), int(center[1])
-    
-    # height, width = heatmap.shape[0:2]
-
-    # left, right = min(x, radius), min(width - x, radius + 1)
-    # top, bottom = min(y, radius), min(height - y, radius + 1)
-
-    # masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
-    # masked_gaussian = torch.from_numpy(
-    #     gaussian[radius - top:radius + bottom,
-    #              radius - left:radius + right]).to(heatmap.device,
-    #                                                torch.float32) 
-
-    cy_radius_x = radius
-    cy_radius_y = int(math.acos(1 - 0.5 * (radius / x) ** 2) / resolution[1] / scale)
-
-    y_diameter = 2 * cy_radius_y + 1
-    x_diameter = 2 * cy_radius_x + 1
-
-    gaussian = gaussian_2d_cylind((y_diameter, x_diameter), sigma=(2 * radius + 1) / 6, 
-            center=[x,y], resolution=resolution, scale=scale, min_range_rho=min_range_rho)
-
-    left, right = min(x, cy_radius_x), min(width - x, cy_radius_x + 1)
-    top, bottom = min(y, cy_radius_y), min(height - y, cy_radius_y + 1)
-
-    masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
-    masked_gaussian = torch.from_numpy(
-        gaussian[cy_radius_y - top:cy_radius_y + bottom,
-                 cy_radius_x - left:cy_radius_x + right]).to(heatmap.device,
-                                                   torch.float32)
-
-    if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
-        torch.max(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
-
-    # Visualization of heatmap
-    # print('radius: {}, rho_radius: {}, theta_radius: {}'.format(radius, cy_radius_x, cy_radius_y))
-    # print('gaussian shape: ', gaussian.shape)
-
-    # import cv2
-    # heatmap2=np.array(heatmap.cpu()) * 255
-    # heatmap2=heatmap2.astype(np.uint8)
-    # # heatmap2=cv2.applyColorMap(heatmap2, cv2.COLORMAP_HOT)
-    # cv2.imshow('heatmap',heatmap2)
-    # cv2.waitKey(0)
-
-    return heatmap
-
-
-def gaussian_radius(det_size, min_overlap=0.5):
-    """Get radius of gaussian.
-
-    Args:
-        det_size (tuple[torch.Tensor]): Size of the detection result.
-        min_overlap (float): Gaussian_overlap. Defaults to 0.5.
-
-    Returns:
-        torch.Tensor: Computed radius.
-    """
-    height, width = det_size
-
-    a1 = 1
-    b1 = (height + width)
-    c1 = width * height * (1 - min_overlap) / (1 + min_overlap)
-    sq1 = torch.sqrt(b1**2 - 4 * a1 * c1)
-    r1 = (b1 + sq1) / 2
-
-    a2 = 4
-    b2 = 2 * (height + width)
-    c2 = (1 - min_overlap) * width * height
-    sq2 = torch.sqrt(b2**2 - 4 * a2 * c2)
-    r2 = (b2 + sq2) / 2
-
-    a3 = 4 * min_overlap
-    b3 = -2 * min_overlap * (height + width)
-    c3 = (min_overlap - 1) * width * height
-    sq3 = torch.sqrt(b3**2 - 4 * a3 * c3)
-    r3 = (b3 + sq3) / 2
-    return min(r1, r2, r3)
 
 
 """
@@ -1334,7 +1143,7 @@ def gaussian_focal_loss(pred, gaussian_target, alpha=2.0, gamma=4.0):
 
 
 @weighted_loss
-def l1_loss(pred, target):
+def l1_loss(pred, target, use_cosine=-1):
     """L1 loss.
 
     Args:
@@ -1346,4 +1155,28 @@ def l1_loss(pred, target):
     """
     assert pred.size() == target.size() and target.numel() > 0
     loss = torch.abs(pred - target)
+    # if pred.shape[2] == 8:
+    #     loss[:, :, 4] = torch.abs(torch.cos(pred[:,:,4]) - torch.cos(target[:, :, 4]))
+    # if use_cosine > -1:
+    #     idx = use_cosine
+    #     loss[:, :, idx] = torch.abs(torch.cos(pred[:,:,idx] - torch.cos(target[:, :, idx])))
+    return loss
+
+
+@weighted_loss
+def smooth_l1_loss(pred, target, use_cosine=-1):
+    """L1 loss.
+
+    Args:
+        pred (torch.Tensor): The prediction.
+        target (torch.Tensor): The learning target of the prediction.
+
+    Returns:
+        torch.Tensor: Calculated loss
+    """
+    assert pred.size() == target.size() and target.numel() > 0
+    diff = pred - target
+    n = torch.abs(diff)
+    beta = 1.0 / 9.0
+    loss = torch.where(n < beta, 0.5 * n ** 2 / beta, n - 0.5 * beta)
     return loss
