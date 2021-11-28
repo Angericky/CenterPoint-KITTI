@@ -39,7 +39,7 @@ class DistributedSampler(_DistributedSampler):
 
 
 def build_dataloader(dataset_cfg, class_names, batch_size, dist, root_path=None, workers=4,
-                     logger=None, training=True, merge_all_iters_to_one_epoch=False, total_epochs=0):
+                     logger=None, training=True, merge_all_iters_to_one_epoch=False, total_epochs=0, unitest=False):
 
     dataset = __all__[dataset_cfg.DATASET](
         dataset_cfg=dataset_cfg,
@@ -63,7 +63,7 @@ def build_dataloader(dataset_cfg, class_names, batch_size, dist, root_path=None,
         sampler = None
     dataloader = DataLoader(
         dataset, batch_size=batch_size, pin_memory=True, num_workers=workers,
-        shuffle=(sampler is None) and training, collate_fn=dataset.collate_batch,
+        shuffle=(sampler is None) and training and not unitest, collate_fn=dataset.collate_batch,
         drop_last=False, sampler=sampler, timeout=0
     )
 

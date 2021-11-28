@@ -50,16 +50,16 @@ class ResBlock(nn.Module):
         shortcut = self.bn1_2(shortcut)
         shortcut = self.relu1_2(shortcut)
 
-        # res = self.conv2_1x3(x)
-        # res = self.bn2_1(res)
-        # res = self.relu2_1(res)
+        res = self.conv2_1x3(x)
+        res = self.bn2_1(res)
+        res = self.relu2_1(res)
 
-        # res = self.conv2_3x1(res)
-        # res = self.bn2_2(res)
-        # res = self.relu2_2(res)
+        res = self.conv2_3x1(res)
+        res = self.bn2_2(res)
+        res = self.relu2_2(res)
 
-        # res = res + shortcut
-        res = shortcut
+        res = res + shortcut
+        # res = shortcut
         
         if self.pooling:
             resB = self.pool(res)
@@ -328,7 +328,7 @@ class BaseBEVBackbone(nn.Module):
                 ups.append(self.deblocks[i](x))
             else:
                 ups.append(x)
-
+            
         if len(ups) > 1:
             x = torch.cat(ups, dim=1)
         elif len(ups) == 1:

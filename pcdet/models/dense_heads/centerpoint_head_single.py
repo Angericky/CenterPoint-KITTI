@@ -574,51 +574,51 @@ class CenterHead(nn.Module):
                         #     torch.cos(rot_rel),
                         # ])
 
-                        gt_box = task_boxes[idx][k:k+1] # (1,7)
+                        # gt_box = task_boxes[idx][k:k+1] # (1,7)
 
-                        corners_bev = box_utils.boxes_to_corners_3d(gt_box)   # (1, 8, 3)
-                        bev_corners = corners_bev[0, :4, :2]
+                        # corners_bev = box_utils.boxes_to_corners_3d(gt_box)   # (1, 8, 3)
+                        # bev_corners = corners_bev[0, :4, :2]
 
-                        cylind_bev_corners = torch.zeros_like(bev_corners)  # (4, 2)
-                        cylind_bev_corners[:, 0] = torch.sqrt(bev_corners[:, 0] ** 2 + bev_corners[:, 1] ** 2)
-                        cylind_bev_corners[:, 1] = torch.atan2(bev_corners[:, 1], bev_corners[:, 0]) 
+                        # cylind_bev_corners = torch.zeros_like(bev_corners)  # (4, 2)
+                        # cylind_bev_corners[:, 0] = torch.sqrt(bev_corners[:, 0] ** 2 + bev_corners[:, 1] ** 2)
+                        # cylind_bev_corners[:, 1] = torch.atan2(bev_corners[:, 1], bev_corners[:, 0]) 
 
-                        nearest_index = torch.argmin(cylind_bev_corners[:, 0])    # (1)
-                        nearest_corner = cylind_bev_corners[nearest_index].squeeze(0)     # (2)
-                        corner_offset = nearest_corner - torch.tensor([rho, phi])
+                        # nearest_index = torch.argmin(cylind_bev_corners[:, 0])    # (1)
+                        # nearest_corner = cylind_bev_corners[nearest_index].squeeze(0)     # (2)
+                        # corner_offset = nearest_corner - torch.tensor([rho, phi])
                         
-                        corner_phi_offset = corner_offset[1:2] / self.target_cfg.OUT_SIZE_FACTOR / cylind_size[1]
+                        # corner_phi_offset = corner_offset[1:2] / self.target_cfg.OUT_SIZE_FACTOR / cylind_size[1]
 
-                        anno_box[new_idx] = torch.cat([
-                            center[0: 1] -
-                            torch.tensor([x], device=device,
-                                        dtype=torch.float32),
-                            arc * r.unsqueeze(0),
-                            z.unsqueeze(0), 
-                            (-corner_offset[0:1] + 1).log(),
-                            #sigmoid_corner_phi,
-                            corner_offset[1:2] * r,
-                            height_dim,
-                            torch.sin(rot_rel),
-                            torch.cos(rot_rel),
-                        ])
+                        # anno_box[new_idx] = torch.cat([
+                        #     center[0: 1] -
+                        #     torch.tensor([x], device=device,
+                        #                 dtype=torch.float32),
+                        #     arc * r.unsqueeze(0),
+                        #     z.unsqueeze(0), 
+                        #     (-corner_offset[0:1] + 1).log(),
+                        #     #sigmoid_corner_phi,
+                        #     corner_offset[1:2] * r,
+                        #     height_dim,
+                        #     torch.sin(rot_rel),
+                        #     torch.cos(rot_rel),
+                        # ])
 
-                        # with open('phi_rad_gt.txt', 'a+') as f:
-                        #     f.write('{}\n'.format(corner_offset[1].item()))
+                        # # with open('phi_rad_gt.txt', 'a+') as f:
+                        # #     f.write('{}\n'.format(corner_offset[1].item()))
 
-                        # with open('rho_gt.txt', 'a+') as f:
-                        #     f.write('{}\n'.format(corner_offset[0].item()))
+                        # # with open('rho_gt.txt', 'a+') as f:
+                        # #     f.write('{}\n'.format(corner_offset[0].item()))
                         
-                        # with open('arc_gt.txt', 'a+') as f:
-                        #      f.write('{}\n'.format((corner_phi_offset * r * 0.0064).item()))
-                        with open('arc_gt_rad.txt', 'a+') as f:
-                             f.write('{}\n'.format((corner_offset[1:2] * r).item()))
-                        # print('anno_box: ', anno_box[new_idx][3].item(), anno_box[new_idx][4].item())
+                        # # with open('arc_gt.txt', 'a+') as f:
+                        # #      f.write('{}\n'.format((corner_phi_offset * r * 0.0064).item()))
+                        # with open('arc_gt_rad.txt', 'a+') as f:
+                        #      f.write('{}\n'.format((corner_offset[1:2] * r).item()))
+                        # # print('anno_box: ', anno_box[new_idx][3].item(), anno_box[new_idx][4].item())
 
 
-                        if corner_offset[0:1].item() - 1 > 0:        
-                            import pdb
-                            pdb.set_trace()
+                        # if corner_offset[0:1].item() - 1 > 0:        
+                        #     import pdb
+                        #     pdb.set_trace()
                         # center[1] = arc * r / rho + center[1]
                         # corner = corner_offset + center
 
@@ -646,6 +646,17 @@ class CenterHead(nn.Module):
                             task_boxes[idx][k][0:2],
                             z.unsqueeze(0), task_boxes[idx][k][3:6],
                             heading.unsqueeze(0), rot_rel, 
+                        ])
+
+                        anno_box[new_idx] = torch.cat([
+                             center[0: 1] -
+                             torch.tensor([x], device=device,
+                                         dtype=torch.float32),
+                             arc * r.unsqueeze(0),
+                             z.unsqueeze(0),
+                             box_dim,
+                             torch.sin(rot_rel),
+                             torch.cos(rot_rel),
                         ])
 
                     else:

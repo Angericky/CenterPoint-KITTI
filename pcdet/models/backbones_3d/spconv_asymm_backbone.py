@@ -231,14 +231,21 @@ class Asymm_3d_spconv(nn.Module):
     def __init__(self, model_cfg, input_channels, grid_size, cy_grid_size=None, init_size=16, **kwargs):
         super().__init__()
         
+        self.input_dim = model_cfg.get('CYLIND_FEAT', None)
+        if self.input_dim == None:
+            self.use_conv_input = True
+        else:
+            self.use_conv_input = False
+
         if cy_grid_size is not None:
             sparse_shape = np.array(grid_size)   # shape for (H, W, L)
             # sparse_shape[0] = 11
             self.sparse_shape = cy_grid_size[::-1] + [1, 0, 0]
 
-            self.conv_input = ResBlock(input_channels, init_size, pooling=False, indice_key="pre")
+            if self.use_conv_input:
+                self.conv_input = ResBlock(input_channels, init_size, pooling=False, indice_key="pre")
             # [1624, 1496, 41] <- [812, 748, 21]
-
+            
             self.conv1 = spconv.SparseSequential(
                 subm_block(init_size, init_size, 3, padding=1, indice_key='subm1'),
                 subm_block(init_size, init_size, 3, padding=1, indice_key='subm1')
@@ -304,9 +311,11 @@ class Asymm_3d_spconv(nn.Module):
         coors = coors.int()
         # import pdb
         # pdb.set_trace()
-        ret = spconv.SparseConvTensor(features=voxel_features, indices=coors, spatial_shape=self.sparse_shape,
+        x = spconv.SparseConvTensor(features=voxel_features, indices=coors, spatial_shape=self.sparse_shape,
                                       batch_size=batch_size)
-        x = self.conv_input(ret)
+
+        if self.use_conv_input:
+            x = self.conv_input(x)
 
         x_conv1 = self.conv1(x)
 
@@ -335,12 +344,21 @@ class Asymm_3d_spconv(nn.Module):
         # bev = out
         # #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
         # cv2.imshow('bev image:', bev)
+    
         # cv2.waitKey(0)
         # import pdb
         # pdb.set_trace()
         batch_dict.update({
             'encoded_spconv_tensor': out,
             'encoded_spconv_tensor_stride': 8
+        })
+        batch_dict.update({
+            'multi_scale_3d_features': {
+                'x_conv1': down1c,
+                'x_conv2': down2c,
+                'x_conv3': down3c,
+                'x_conv4': out,
+            }
         })
 
         return batch_dict

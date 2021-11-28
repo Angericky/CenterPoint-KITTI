@@ -6,7 +6,7 @@ import torch.nn as nn
 from ...ops.iou3d_nms import iou3d_nms_utils
 from .. import backbones_2d, backbones_3d, dense_heads, roi_heads
 from ..backbones_2d import map_to_bev
-from ..backbones_3d import pfe, vfe
+from ..backbones_3d import pfe, vfe, cfe
 from ..model_utils import model_nms_utils
 
 
@@ -20,7 +20,7 @@ class Detector3DTemplate(nn.Module):
         self.register_buffer('global_step', torch.LongTensor(1).zero_())
 
         self.module_topology = [
-            'vfe', 'backbone_3d', 'map_to_bev_module', 'pfe',
+            'cfe', 'vfe', 'backbone_3d', 'map_to_bev_module', 'pfe',
             'backbone_2d', 'dense_head',  'point_head', 'roi_head'
         ]
 
@@ -43,12 +43,14 @@ class Detector3DTemplate(nn.Module):
             'cylind_size': self.dataset.cylind_size if hasattr(self.dataset, 'cylind_size') else None,
             'cy_grid_size': self.dataset.cy_grid_size if hasattr(self.dataset, 'cy_grid_size') else None
         }
+
         for module_name in self.module_topology:
             print('module_name: ', module_name)
             module, model_info_dict = getattr(self, 'build_%s' % module_name)(
                 model_info_dict=model_info_dict
             )
             self.add_module(module_name, module)
+
         return model_info_dict['module_list']
 
     def build_vfe(self, model_info_dict):
@@ -106,6 +108,17 @@ class Detector3DTemplate(nn.Module):
         model_info_dict['module_list'].append(backbone_2d_module)
         model_info_dict['num_bev_features'] = backbone_2d_module.num_bev_features
         return backbone_2d_module, model_info_dict
+    
+    def build_cfe(self, model_info_dict):
+
+        if self.model_cfg.get('CFE', None) is None:
+            return None, model_info_dict
+
+        cfe_module = cfe.__all__[self.model_cfg.CFE.NAME](
+            model_cfg=self.model_cfg.CFE
+        )
+        model_info_dict['module_list'].append(cfe_module)
+        return cfe_module, model_info_dict
 
     def build_pfe(self, model_info_dict):
         if self.model_cfg.get('PFE', None) is None:
@@ -253,7 +266,8 @@ class Detector3DTemplate(nn.Module):
                     cls_preds = [cls_preds]
                     multihead_label_mapping = [torch.arange(1, self.num_class, device=cls_preds[0].device)]
                 else:
-                    multihead_label_mapping = batch_dict['multihead_label_mapping']
+                    multihead_label_mapping = batch_dict['multihead_label_mapping'
+                    ]
 
                 cur_start_idx = 0
                 pred_scores, pred_labels, pred_boxes = [], [], []
@@ -300,9 +314,9 @@ class Detector3DTemplate(nn.Module):
                 # final_labels = final_labels[gt_scores_index]
                 # final_boxes = final_boxes[gt_scores_index]
 
-                # print('boxes: ', final_boxes[1])
-                # import pdb
-                # pdb.set_trace()
+            # print('boxes: ', final_boxes)
+            # import pdb
+            # pdb.set_trace()
 
             if torch.any(torch.isnan(final_boxes)):
                 import pdb
