@@ -318,36 +318,15 @@ class Asymm_3d_spconv(nn.Module):
             x = self.conv_input(x)
 
         x_conv1 = self.conv1(x)
-
-        #down1c, down1b = self.resBlock2(ret)
-
         down1c = self.conv2(x_conv1)
         down2c = self.conv3(down1c)
         down3c = self.conv4(down2c)
 
-        # down4c, down4b = self.resBlock5(down3c)
-
-        # up4e = self.upBlock0(down4c, down4b)
-        # up3e = self.upBlock1(up4e, down3b)
-        # up2e = self.upBlock2(up3e, down2b)
-        # up1e = self.upBlock3(up2e, down1b)
-
-        # up0e = self.ReconNet(up1e)
-
-        # up0e.features = torch.cat((up0e.features, up1e.features), 1)
-
         out = self.conv_output(down3c)
-        # import cv2
+
         # import pdb
         # pdb.set_trace()
 
-        # bev = out
-        # #heatmap=cv2.applyColorMap(heatmap, cv2.COLORMAP_HOT)
-        # cv2.imshow('bev image:', bev)
-    
-        # cv2.waitKey(0)
-        # import pdb
-        # pdb.set_trace()
         batch_dict.update({
             'encoded_spconv_tensor': out,
             'encoded_spconv_tensor_stride': 8
@@ -358,6 +337,166 @@ class Asymm_3d_spconv(nn.Module):
                 'x_conv2': down2c,
                 'x_conv3': down3c,
                 'x_conv4': out,
+            }
+        })
+
+        return batch_dict
+
+
+class SparseBasicBlock(spconv.SparseModule):
+    expansion = 1
+
+    def __init__(self, inplanes, planes, stride=1, norm_fn=None, downsample=None, indice_key=None):
+        super(SparseBasicBlock, self).__init__()
+
+        assert norm_fn is not None
+        bias = norm_fn is not None
+        self.conv1 = spconv.SubMConv3d(
+            inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=bias, indice_key=indice_key
+        )
+        self.bn1 = norm_fn(planes)
+        self.relu = nn.ReLU()
+        self.conv2 = spconv.SubMConv3d(
+            planes, planes, kernel_size=3, stride=stride, padding=1, bias=bias, indice_key=indice_key
+        )
+        self.bn2 = norm_fn(planes)
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out.features = self.bn1(out.features)
+        out.features = self.relu(out.features)
+
+        out = self.conv2(out)
+        out.features = self.bn2(out.features)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        out.features += identity.features
+        out.features = self.relu(out.features)
+
+        return out
+        
+
+class Asymm_3d_res_spconv(nn.Module):
+    def __init__(self, model_cfg, input_channels, grid_size, cy_grid_size=None, init_size=16, **kwargs):
+        super().__init__()
+        norm_fn = partial(nn.BatchNorm1d, eps=1e-3, momentum=0.01)
+        
+        self.input_dim = model_cfg.get('CYLIND_FEAT', None)
+        if self.input_dim == None:
+            self.use_conv_input = True
+        else:
+            self.use_conv_input = False
+
+        if cy_grid_size is not None:
+            sparse_shape = np.array(grid_size)   # shape for (H, W, L)
+            # sparse_shape[0] = 11
+            self.sparse_shape = cy_grid_size[::-1] + [1, 0, 0]
+
+            if self.use_conv_input:
+                self.conv_input = ResBlock(input_channels, init_size, pooling=False, indice_key="pre")
+            # [1624, 1496, 41] <- [812, 748, 21]
+            
+            self.conv1 = spconv.SparseSequential(
+                # subm_block(init_size, init_size, 3, padding=1, indice_key='subm1'),
+                # subm_block(init_size, init_size, 3, padding=1, indice_key='subm1')
+                SparseBasicBlock(16, 16, norm_fn=norm_fn, indice_key='res1'),
+                SparseBasicBlock(16, 16, norm_fn=norm_fn, indice_key='res1'),
+                # ResBlock(init_size, init_size, pooling=False, indice_key="subm1"),
+                # ResBlock(init_size, init_size, pooling=False, indice_key="subm1"),
+            )
+            # [1600, 1408, 41] <- [800, 704, 21]
+            
+            self.conv2 = spconv.SparseSequential(
+                ResBlock(init_size, 2 * init_size, indice_key="down2"),
+                # ResBlock(2 * init_size, 2 * init_size, pooling=False, indice_key="subm2"),
+                # ResBlock(2 * init_size, 2 * init_size, pooling=False, indice_key="subm2"),
+                # subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
+                # subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
+                SparseBasicBlock(32, 32, norm_fn=norm_fn, indice_key='res2'),
+                SparseBasicBlock(32, 32, norm_fn=norm_fn, indice_key='res2'),
+            )
+            # [812, 748, 21] <- [406, 374, 11]
+
+            # [800, 704, 21] <- [400, 352, 11]
+            
+            self.conv3 = spconv.SparseSequential(
+                ResBlock(2 * init_size, 4 * init_size, indice_key="down3"),
+                # ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
+                # ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
+                SparseBasicBlock(64, 64, norm_fn=norm_fn, indice_key='res3'),
+                SparseBasicBlock(64, 64, norm_fn=norm_fn, indice_key='res3'),
+            )
+            # [406, 374, 11] <- [203, 187, 5]
+
+            # [400, 352, 11] <- [200, 352, 5]s
+            self.conv4 = spconv.SparseSequential(
+                ResBlock(4 * init_size, 8 * init_size, padding=(0, 1, 1), indice_key="down4"),
+                # ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
+                # ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
+                # subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
+                # subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
+                SparseBasicBlock(128, 128, norm_fn=norm_fn, indice_key='res4'),
+                SparseBasicBlock(128, 128, norm_fn=norm_fn, indice_key='res4'),
+            )
+            
+            self.conv_output = ResBlock(8 * init_size, 8 * init_size, kernel_size=(3, 1, 1), padding=0, stride=(2, 1, 1), indice_key="out") 
+    
+        else:
+            sparse_shape = np.array(grid_size)   # shape for (H, W, L)
+            # sparse_shape[0] = 11
+            self.sparse_shape = grid_size[::-1] + [1, 0, 0]
+
+            self.conv_input = ResContextBlock(input_channels, init_size, indice_key="pre")
+            # [1600, 1408, 41] <- [800, 704, 21]
+            self.resBlock2 = ResBlock(init_size, 2 * init_size, 0.2, height_pooling=True, indice_key="down2")
+            # [800, 704, 21] <- [400, 352, 11]
+            self.resBlock3 = ResBlock(2 * init_size, 4 * init_size, 0.2, height_pooling=True, indice_key="down3")
+            # [400, 352, 11] <- [200, 352, 5]
+            self.resBlock4 = ResBlock(4 * init_size, 8 * init_size, 0.2, height_pooling=True, padding=(0, 1, 1),
+                                    indice_key="down4")
+
+            self.conv_output = ResBlock(8 * init_size, 8 * init_size, 0.2, height_pooling=False, kernel_size=(3, 1, 1), padding=0, indice_key="out")
+        self.num_point_features = 128
+
+
+    def forward(self, batch_dict):
+        voxel_features, coors = batch_dict['voxel_features'], batch_dict['voxel_coords']
+        batch_size = batch_dict['batch_size']
+
+        # x = x.contiguous()
+        coors = coors.int()
+        # import pdb
+        # pdb.set_trace()
+        x = spconv.SparseConvTensor(features=voxel_features, indices=coors, spatial_shape=self.sparse_shape,
+                                      batch_size=batch_size)
+
+        if self.use_conv_input:
+            x = self.conv_input(x)
+
+        x_conv1 = self.conv1(x)
+
+        down1c = self.conv2(x_conv1)
+        down2c = self.conv3(down1c)
+        down3c = self.conv4(down2c)
+
+        out = self.conv_output(down3c)
+
+        batch_dict.update({
+            'encoded_spconv_tensor': out,
+            'encoded_spconv_tensor_stride': 8
+        })
+        batch_dict.update({
+            'multi_scale_3d_features': {
+                'x_conv1': x_conv1,
+                'x_conv2': down1c,
+                'x_conv3': down2c,
+                'x_conv4': down3c,
             }
         })
 

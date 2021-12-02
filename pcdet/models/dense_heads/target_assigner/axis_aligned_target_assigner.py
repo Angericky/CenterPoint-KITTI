@@ -78,7 +78,7 @@ class AxisAlignedTargetAssigner(object):
                     feature_map_size = anchors.shape[:3]
                     anchors = anchors.view(-1, anchors.shape[-1])
                     selected_classes = cur_gt_classes[mask]
-
+                
                 single_target = self.assign_targets_single(
                     anchors,
                     cur_gt[mask],

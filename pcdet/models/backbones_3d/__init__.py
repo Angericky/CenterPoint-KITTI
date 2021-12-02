@@ -1,7 +1,7 @@
 from .pointnet2_backbone import PointNet2Backbone, PointNet2MSG
 from .spconv_backbone import VoxelBackBone8x, VoxelResBackBone8x
 from .spconv_unet import UNetV2
-from .spconv_asymm_backbone import Asymm_3d_spconv
+from .spconv_asymm_backbone import Asymm_3d_spconv, Asymm_3d_res_spconv
 
 __all__ = {
     'VoxelBackBone8x': VoxelBackBone8x,
@@ -9,5 +9,6 @@ __all__ = {
     'PointNet2Backbone': PointNet2Backbone,
     'PointNet2MSG': PointNet2MSG,
     'VoxelResBackBone8x': VoxelResBackBone8x,
-    'Asymm3dSpconv': Asymm_3d_spconv
+    'Asymm3dSpconv': Asymm_3d_spconv,
+    'Asymm3dResSpconv': Asymm_3d_res_spconv
 }

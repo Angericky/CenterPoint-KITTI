@@ -167,9 +167,19 @@ class AsymmBEVBackbone(nn.Module):
              
             if len(upsample_strides) > 0:
                 stride = upsample_strides[idx]
-                if stride >= 1:
+                if stride > 1:
                     self.deblocks.append(nn.Sequential(
                         UpBlock(num_filters[idx], num_upsample_filters[idx], kernel_size=stride, stride=stride)
+                    ))
+                else:
+                    self.deblocks.append(nn.Sequential(
+                        nn.ConvTranspose2d(
+                            num_filters[idx], num_upsample_filters[idx],
+                            upsample_strides[idx],
+                            stride=stride, bias=False
+                        ),
+                        nn.BatchNorm2d(num_upsample_filters[idx], eps=1e-3, momentum=0.01),
+                        nn.LeakyReLU()
                     ))
                 # else:
                 #     stride = np.round(1 / stride).astype(np.int)

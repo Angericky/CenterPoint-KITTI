@@ -55,7 +55,7 @@ class DatasetTemplate(torch_data.Dataset):
         # self.cylind_fea_model = CylinderFeatureEncoder(fea_dim=4, fea_compre=16)
 
         if self.cylind_feats and self.cart_feats:
-            self.num_point_features = 5
+            self.num_point_features = 6
         if self.voxel_centers:
             self.num_point_features += 3
 
@@ -218,7 +218,11 @@ class DatasetTemplate(torch_data.Dataset):
             pol_feats = np.delete(pol_feats, remove_index, axis=0)
 
             cy_grid_ind = (np.floor((np.clip(xyz_pol.astype(np.float64) * 1e4, min_bound_1e4, max_bound_1e4) - min_bound_1e4) / intervals_1e4)).astype(np.int)
-
+            
+            if self.voxel_centers:
+                voxel_centers = (cy_grid_ind.astype(np.float32) + 0.5) * intervals  + min_bound
+                data_dict['voxel_centers'] = voxel_centers
+            
             # unq, cy_feats = self.cylind_fea_model(pol_feats, cy_grid_ind)
             # sort potential repeated grid_inds first by the 1st col, then 3nd col, then 3rd col. 
             sorted_indices = np.lexsort((cy_grid_ind[:, 2], cy_grid_ind[:, 1], cy_grid_ind[:, 0]))
@@ -227,10 +231,6 @@ class DatasetTemplate(torch_data.Dataset):
 
             unique_grid_ind, first_indexes, grid_cnts = np.unique(sorted_cy_grid_ind, axis=0, return_index=True, return_counts=True)
             
-            if self.voxel_centers:
-                voxel_centers = (unique_grid_ind.astype(np.float32) + 0.5) * intervals  + min_bound
-                data_dict['voxel_centers'] = voxel_centers
-
             # get a list of all indices of unique elements in a numpy array
             sector_feats = np.split(sorted_pol_feats, first_indexes[1:])
             voxel_max_num = 5 #data_dict['voxels'].shape[1]
@@ -249,7 +249,11 @@ class DatasetTemplate(torch_data.Dataset):
             data_dict['voxel_coords'] = unique_grid_ind[:, [2, 1, 0]]
             data_dict['voxels'] = sectors
             data_dict['voxel_num_points'] = grid_cnts
-            data_dict['pt_fea'] = pol_feats
+            if self.voxel_centers:
+                cy_fea = np.concatenate((voxel_centers, pol_feats), axis=1)
+            else:
+                cy_fea = pol_feats
+            data_dict['pt_fea'] = cy_fea
             data_dict['xy_ind'] = cy_grid_ind
 
 

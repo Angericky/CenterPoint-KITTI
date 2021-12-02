@@ -9,7 +9,8 @@ from .target_assigner.axis_aligned_target_assigner import AxisAlignedTargetAssig
 
 
 class AnchorHeadTemplate(nn.Module):
-    def __init__(self, model_cfg, num_class, class_names, grid_size, point_cloud_range, predict_boxes_when_training):
+    def __init__(self, model_cfg, num_class, class_names, grid_size, point_cloud_range, predict_boxes_when_training, cy_grid_size=None, cylind_range=None):
+                    
         super().__init__()
         self.model_cfg = model_cfg
         self.num_class = num_class
@@ -24,10 +25,17 @@ class AnchorHeadTemplate(nn.Module):
         )
 
         anchor_generator_cfg = self.model_cfg.ANCHOR_GENERATOR_CONFIG
-        anchors, self.num_anchors_per_location = self.generate_anchors(
-            anchor_generator_cfg, grid_size=grid_size, point_cloud_range=point_cloud_range,
-            anchor_ndim=self.box_coder.code_size
-        )
+
+        if cy_grid_size is None:
+            anchors, self.num_anchors_per_location = self.generate_anchors(
+                anchor_generator_cfg, grid_size=grid_size, point_cloud_range=point_cloud_range,
+                anchor_ndim=self.box_coder.code_size
+            )
+        else:
+            anchors, self.num_anchors_per_location = self.generate_anchors(
+                anchor_generator_cfg, grid_size=cy_grid_size, point_cloud_range=cylind_range,
+                anchor_ndim=self.box_coder.code_size
+            )
         self.anchors = [x.cuda() for x in anchors]
         self.target_assigner = self.get_target_assigner(anchor_target_cfg)
 
@@ -101,6 +109,7 @@ class AnchorHeadTemplate(nn.Module):
     def get_cls_layer_loss(self):
         cls_preds = self.forward_ret_dict['cls_preds']
         box_cls_labels = self.forward_ret_dict['box_cls_labels']
+        
         batch_size = int(cls_preds.shape[0])
         cared = box_cls_labels >= 0  # [N, num_anchors]
         positives = box_cls_labels > 0
