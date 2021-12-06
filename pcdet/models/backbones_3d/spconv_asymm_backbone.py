@@ -5,37 +5,37 @@ from torch import nn
 from functools import partial
 
 # features: (Z, phi, rho)
-def conv3x3(in_planes, out_planes, stride=1, indice_key=None):
-    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=3, stride=stride,
+def conv3x3(in_planes, out_planes, stride=1, dilation=1, indice_key=None):
+    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=3, stride=stride, dilation=dilation,
                              padding=1, bias=False, indice_key=indice_key)
 
 
-def conv1x3(in_planes, out_planes, stride=1, indice_key=None):
-    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=(3, 1, 3), stride=stride,
+def conv1x3(in_planes, out_planes, stride=1, dilation=1, indice_key=None):
+    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=(3, 1, 3), stride=stride, dilation=dilation,
                              padding=(1, 0, 1), bias=False, indice_key=indice_key)
 
-def conv3x1(in_planes, out_planes, stride=1, indice_key=None):
-    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=(3, 3, 1), stride=stride,
+def conv3x1(in_planes, out_planes, stride=1, dilation=1, indice_key=None):
+    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=(3, 3, 1), stride=stride, dilation=dilation,
                              padding=(1, 1, 0), bias=False, indice_key=indice_key)
 
 
-def conv1x1x3(in_planes, out_planes, stride=1, indice_key=None):
-    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=(1, 1, 3), stride=stride,
+def conv1x1x3(in_planes, out_planes, stride=1, dilation=1, indice_key=None):
+    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=(1, 1, 3), stride=stride, dilation=dilation,
                              padding=(0, 0, 1), bias=False, indice_key=indice_key)
 
 
-def conv1x3x1(in_planes, out_planes, stride=1, indice_key=None):
-    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=(1, 3, 1), stride=stride,
+def conv1x3x1(in_planes, out_planes, stride=1, dilation=1, indice_key=None):
+    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=(1, 3, 1), stride=stride, dilation=dilation,
                              padding=(0, 1, 0), bias=False, indice_key=indice_key)
 
 
-def conv3x1x1(in_planes, out_planes, stride=1, indice_key=None):
-    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=(3, 1, 1), stride=stride,
+def conv3x1x1(in_planes, out_planes, stride=1, dilation=1, indice_key=None):
+    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=(3, 1, 1), stride=stride, dilation=dilation, 
                              padding=(1, 0, 0), bias=False, indice_key=indice_key)
 
 
-def conv1x1(in_planes, out_planes, stride=1, indice_key=None):
-    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=1, stride=stride,
+def conv1x1(in_planes, out_planes, stride=1, dilation=1, indice_key=None):
+    return spconv.SubMConv3d(in_planes, out_planes, kernel_size=1, stride=stride, dilation=dilation,
                              padding=1, bias=False, indice_key=indice_key)
 
 
@@ -52,12 +52,12 @@ def subm_block(in_channels, out_channels, kernel_size, indice_key=None, stride=1
     return m
 
 class ResBlock(spconv.SparseModule):
-    def __init__(self, in_filters, out_filters, kernel_size=(3, 3, 3), stride=2, padding=1,
-                 pooling=True,  indice_key=None):
+    def __init__(self, in_filters, out_filters, kernel_size=(3, 3, 3), stride=2, padding=1, dilation=1, 
+                 pooling=True, indice_key=None):
         super(ResBlock, self).__init__()
         self.pooling = pooling
 
-        self.conv1 = conv3x1(in_filters, out_filters, indice_key=indice_key + "bef")
+        self.conv1 = conv3x1(in_filters, out_filters, dilation=dilation, indice_key=indice_key + "bef")
         self.act1 = nn.LeakyReLU(inplace=True)
         self.bn1 = nn.BatchNorm1d(out_filters)
 
@@ -67,7 +67,7 @@ class ResBlock(spconv.SparseModule):
         #     nn.LeakyReLU(inplace=True),
         # )
 
-        self.conv1_2 = conv1x3(out_filters, out_filters, indice_key=indice_key + "bef")
+        self.conv1_2 = conv1x3(out_filters, out_filters, dilation=dilation, indice_key=indice_key + "bef")
         self.act1_2 = nn.LeakyReLU(inplace=True)
         self.bn1_2 = nn.BatchNorm1d(out_filters)
 
@@ -77,11 +77,11 @@ class ResBlock(spconv.SparseModule):
         #     nn.LeakyReLU(inplace=True),
         # )
 
-        self.conv2 = conv1x3(in_filters, out_filters, indice_key=indice_key + "bef")
+        self.conv2 = conv1x3(in_filters, out_filters, dilation=dilation, indice_key=indice_key + "bef")
         self.act2 = nn.LeakyReLU(inplace=True)
         self.bn2 = nn.BatchNorm1d(out_filters)
 
-        self.conv2_2 = conv3x1(out_filters, out_filters, indice_key=indice_key + "bef")
+        self.conv2_2 = conv3x1(out_filters, out_filters, dilation=dilation, indice_key=indice_key + "bef")
         self.act2_2 = nn.LeakyReLU(inplace=True)
         self.bn2_2 = nn.BatchNorm1d(out_filters)
 
@@ -222,10 +222,31 @@ def subm_block(in_channels, out_channels, kernel_size, indice_key=None, stride=1
     m = spconv.SparseSequential(
         conv,
         norm_fn(out_channels),
-        nn.LeakyReLU(inplace=True),
+        nn.ReLU(inplace=True),
     )
 
     return m
+
+
+class dilate_block(nn.Module):
+    def __init__(self, in_channels, out_channels, indice_key=None):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.block1 = ResBlock(in_channels, out_channels, indice_key=indice_key)
+        self.block2 = ResBlock(out_channels, out_channels, dilation=2, pooling=False, indice_key=indice_key)
+        self.block3 = ResBlock(out_channels, out_channels, dilation=3, pooling=False, indice_key=indice_key)
+        self.downdim = conv1x1(out_channels * 3, out_channels, indice_key=indice_key)
+
+    def forward(self, x):
+        x_1 = self.block1(x)
+        x_2 = self.block2(x_1)
+        x_3 = self.block3(x_2)
+
+        x_1.features = torch.cat((x_1.features, x_2.features, x_3.features), dim=-1)
+        output = self.downdim(x_1)
+        
+        return output
 
 class Asymm_3d_spconv(nn.Module):
     def __init__(self, model_cfg, input_channels, grid_size, cy_grid_size=None, init_size=16, **kwargs):
@@ -236,8 +257,10 @@ class Asymm_3d_spconv(nn.Module):
             self.use_conv_input = True
         else:
             self.use_conv_input = False
+        self.dilate = model_cfg.get('DILATE', None)
 
         if cy_grid_size is not None:
+            
             sparse_shape = np.array(grid_size)   # shape for (H, W, L)
             # sparse_shape[0] = 11
             self.sparse_shape = cy_grid_size[::-1] + [1, 0, 0]
@@ -246,44 +269,85 @@ class Asymm_3d_spconv(nn.Module):
                 self.conv_input = ResBlock(input_channels, init_size, pooling=False, indice_key="pre")
             # [1624, 1496, 41] <- [812, 748, 21]
             
-            self.conv1 = spconv.SparseSequential(
-                subm_block(init_size, init_size, 3, padding=1, indice_key='subm1'),
-                subm_block(init_size, init_size, 3, padding=1, indice_key='subm1')
-                # ResBlock(init_size, init_size, pooling=False, indice_key="subm1"),
-                # ResBlock(init_size, init_size, pooling=False, indice_key="subm1"),
-            )
-            # [1600, 1408, 41] <- [800, 704, 21]
-            
-            self.conv2 = spconv.SparseSequential(
-                ResBlock(init_size, 2 * init_size, indice_key="down2"),
-                # ResBlock(2 * init_size, 2 * init_size, pooling=False, indice_key="subm2"),
-                # ResBlock(2 * init_size, 2 * init_size, pooling=False, indice_key="subm2"),
-                subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
-                subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
-            )
-            # [812, 748, 21] <- [406, 374, 11]
+            if self.dilate:
+                self.conv1 = spconv.SparseSequential(
+                    # subm_block(init_size, init_size, 3, padding=1, indice_key='subm1'),
+                    # subm_block(init_size, init_size, 3, padding=1, indice_key='subm1')
+                    #ResBlock(init_size, init_size, dilation=2, pooling=False, indice_key="subm1"),
+                    #ResBlock(init_size, init_size, dilation=3, pooling=False, indice_key="subm1"),
+                )
+                # [1600, 1408, 41] <- [800, 704, 21]
+                
+                self.conv2 = spconv.SparseSequential(
+                    dilate_block(init_size, 2 * init_size, indice_key="down2"),
+                    #ResBlock(2 * init_size, 2 * init_size, dilation=2, pooling=False, indice_key="subm2"),
+                    #ResBlock(2 * init_size, 2 * init_size, dilation=3, pooling=False, indice_key="subm2"),
+                    # subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
+                    # subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
+                )
+                # [812, 748, 21] <- [406, 374, 11]
 
-            # [800, 704, 21] <- [400, 352, 11]
-            
-            self.conv3 = spconv.SparseSequential(
-                ResBlock(2 * init_size, 4 * init_size, indice_key="down3"),
-                # ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
-                # ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
-                subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
-                subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
-            )
-            # [406, 374, 11] <- [203, 187, 5]
+                # [800, 704, 21] <- [400, 352, 11]
+                
+                self.conv3 = spconv.SparseSequential(
+                    dilate_block(2 * init_size, 4 * init_size, indice_key="down3"),
+                    #ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
+                    #ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
+                    # subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
+                    # subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
+                )
+                # [406, 374, 11] <- [203, 187, 5]
 
-            # [400, 352, 11] <- [200, 352, 5]s
-            self.conv4 = spconv.SparseSequential(
-                ResBlock(4 * init_size, 8 * init_size, padding=(0, 1, 1), indice_key="down4"),
-                # ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
-                # ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
-                subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
-                subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
-            )
+                # [400, 352, 11] <- [200, 352, 5]s
+                self.conv4 = spconv.SparseSequential(
+                    dilate_block(4 * init_size, 8 * init_size, padding=(0, 1, 1), indice_key="down4"),
+                    #ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
+                    #ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
+                    # subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
+                    # subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
+                )
             
-            self.conv_output = ResBlock(8 * init_size, 8 * init_size, kernel_size=(3, 1, 1), padding=0, stride=(2, 1, 1), indice_key="out") 
+                self.conv_output = ResBlock(8 * init_size, 8 * init_size, kernel_size=(3, 1, 1), padding=0, stride=(2, 1, 1), indice_key="out") 
+    
+            else:
+                self.conv1 = spconv.SparseSequential(
+                    subm_block(init_size, init_size, 3, padding=1, indice_key='subm1'),
+                    subm_block(init_size, init_size, 3, padding=1, indice_key='subm1')
+                    #ResBlock(init_size, init_size, pooling=False, indice_key="subm1"),
+                    #ResBlock(init_size, init_size, pooling=False, indice_key="subm1"),
+                )
+                # [1600, 1408, 41] <- [800, 704, 21]
+                
+                self.conv2 = spconv.SparseSequential(
+                    ResBlock(init_size, 2 * init_size, indice_key="down2"),
+                    #ResBlock(2 * init_size, 2 * init_size, pooling=False, indice_key="subm2"),
+                    #ResBlock(2 * init_size, 2 * init_size, pooling=False, indice_key="subm2"),
+                    subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
+                    subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
+                )
+                # [812, 748, 21] <- [406, 374, 11]
+
+                # [800, 704, 21] <- [400, 352, 11]
+                
+                self.conv3 = spconv.SparseSequential(
+                    ResBlock(2 * init_size, 4 * init_size, indice_key="down3"),
+                    #ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
+                    #ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
+                    subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
+                    subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
+                )
+                # [406, 374, 11] <- [203, 187, 5]
+
+                # [400, 352, 11] <- [200, 352, 5]s
+                self.conv4 = spconv.SparseSequential(
+                    ResBlock(4 * init_size, 8 * init_size, padding=(0, 1, 1), indice_key="down4"),
+                    # ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
+                    # ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
+                    subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
+                    subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
+                )
+            
+                self.conv_output = ResBlock(8 * init_size, 8 * init_size, kernel_size=(3, 1, 1), padding=0, stride=(2, 1, 1), indice_key="out") 
     
         else:
             sparse_shape = np.array(grid_size)   # shape for (H, W, L)
