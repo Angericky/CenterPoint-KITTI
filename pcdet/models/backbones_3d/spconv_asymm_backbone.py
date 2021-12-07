@@ -229,14 +229,14 @@ def subm_block(in_channels, out_channels, kernel_size, indice_key=None, stride=1
 
 
 class dilate_block(nn.Module):
-    def __init__(self, in_channels, out_channels, indice_key=None):
+    def __init__(self, in_channels, out_channels, padding=1, indice_key=None):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.block1 = ResBlock(in_channels, out_channels, indice_key=indice_key)
-        self.block2 = ResBlock(out_channels, out_channels, dilation=2, pooling=False, indice_key=indice_key)
-        self.block3 = ResBlock(out_channels, out_channels, dilation=3, pooling=False, indice_key=indice_key)
-        self.downdim = conv1x1(out_channels * 3, out_channels, indice_key=indice_key)
+        self.block1 = ResBlock(in_channels, out_channels, padding=padding,indice_key='%s_1' % indice_key)
+        self.block2 = ResBlock(out_channels, out_channels, padding=padding, dilation=2, pooling=False, indice_key='%s_2' % indice_key)
+        self.block3 = ResBlock(out_channels, out_channels, padding=padding, dilation=3, pooling=False, indice_key='%s_3' % indice_key)
+        self.downdim = conv1x1(out_channels * 3, out_channels, indice_key='%s_down' % indice_key)
 
     def forward(self, x):
         x_1 = self.block1(x)
@@ -268,51 +268,51 @@ class Asymm_3d_spconv(nn.Module):
             if self.use_conv_input:
                 self.conv_input = ResBlock(input_channels, init_size, pooling=False, indice_key="pre")
             # [1624, 1496, 41] <- [812, 748, 21]
-            
+            # print('dilate: ',self.dilate)
+            # import pdb
+            # pdb.set_trace()
+
             if self.dilate:
-                self.conv1 = spconv.SparseSequential(
-                    # subm_block(init_size, init_size, 3, padding=1, indice_key='subm1'),
-                    # subm_block(init_size, init_size, 3, padding=1, indice_key='subm1')
-                    #ResBlock(init_size, init_size, dilation=2, pooling=False, indice_key="subm1"),
-                    #ResBlock(init_size, init_size, dilation=3, pooling=False, indice_key="subm1"),
-                )
+                # self.conv1 = spconv.SparseSequential(
+                #     # subm_block(init_size, init_size, 3, padding=1, indice_key='subm1'),
+                #     # subm_block(init_size, init_size, 3, padding=1, indice_key='subm1')
+                #     #ResBlock(init_size, init_size, dilation=2, pooling=False, indice_key="subm1"),
+                #     #ResBlock(init_size, init_size, dilation=3, pooling=False, indice_key="subm1"),
+                # )
                 # [1600, 1408, 41] <- [800, 704, 21]
                 
-                self.conv2 = spconv.SparseSequential(
-                    dilate_block(init_size, 2 * init_size, indice_key="down2"),
+                self.conv2 = dilate_block(init_size, 2 * init_size, indice_key="down2")
                     #ResBlock(2 * init_size, 2 * init_size, dilation=2, pooling=False, indice_key="subm2"),
                     #ResBlock(2 * init_size, 2 * init_size, dilation=3, pooling=False, indice_key="subm2"),
                     # subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
                     # subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
-                )
+                
                 # [812, 748, 21] <- [406, 374, 11]
 
                 # [800, 704, 21] <- [400, 352, 11]
                 
-                self.conv3 = spconv.SparseSequential(
-                    dilate_block(2 * init_size, 4 * init_size, indice_key="down3"),
+                self.conv3 = dilate_block(2 * init_size, 4 * init_size, indice_key="down3")
                     #ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
                     #ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
                     # subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
                     # subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
-                )
+                
                 # [406, 374, 11] <- [203, 187, 5]
 
                 # [400, 352, 11] <- [200, 352, 5]s
-                self.conv4 = spconv.SparseSequential(
-                    dilate_block(4 * init_size, 8 * init_size, padding=(0, 1, 1), indice_key="down4"),
+                self.conv4 = dilate_block(4 * init_size, 8 * init_size, padding=(0, 1, 1), indice_key="down4")
                     #ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
                     #ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
                     # subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
                     # subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
-                )
+                
             
                 self.conv_output = ResBlock(8 * init_size, 8 * init_size, kernel_size=(3, 1, 1), padding=0, stride=(2, 1, 1), indice_key="out") 
     
             else:
                 self.conv1 = spconv.SparseSequential(
-                    subm_block(init_size, init_size, 3, padding=1, indice_key='subm1'),
-                    subm_block(init_size, init_size, 3, padding=1, indice_key='subm1')
+                    # subm_block(init_size, init_size, 3, padding=1, indice_key='subm1'),
+                    # subm_block(init_size, init_size, 3, padding=1, indice_key='subm1')
                     #ResBlock(init_size, init_size, pooling=False, indice_key="subm1"),
                     #ResBlock(init_size, init_size, pooling=False, indice_key="subm1"),
                 )
@@ -322,8 +322,8 @@ class Asymm_3d_spconv(nn.Module):
                     ResBlock(init_size, 2 * init_size, indice_key="down2"),
                     #ResBlock(2 * init_size, 2 * init_size, pooling=False, indice_key="subm2"),
                     #ResBlock(2 * init_size, 2 * init_size, pooling=False, indice_key="subm2"),
-                    subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
-                    subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
+                    # subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
+                    # subm_block(2 * init_size, 2 * init_size, 3, padding=1, indice_key='subm2'),
                 )
                 # [812, 748, 21] <- [406, 374, 11]
 
@@ -333,8 +333,8 @@ class Asymm_3d_spconv(nn.Module):
                     ResBlock(2 * init_size, 4 * init_size, indice_key="down3"),
                     #ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
                     #ResBlock(4 * init_size, 4 * init_size, pooling=False, indice_key="subm3"),
-                    subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
-                    subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
+                    # subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
+                    # subm_block(4 * init_size, 4 * init_size, 3, padding=1, indice_key='subm3'),
                 )
                 # [406, 374, 11] <- [203, 187, 5]
 
@@ -343,8 +343,8 @@ class Asymm_3d_spconv(nn.Module):
                     ResBlock(4 * init_size, 8 * init_size, padding=(0, 1, 1), indice_key="down4"),
                     # ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
                     # ResBlock(8 * init_size, 8 * init_size, pooling=False, indice_key="subm4"),
-                    subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
-                    subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
+                    # subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
+                    # subm_block(8 * init_size, 8 * init_size, 3, padding=1, indice_key='subm4'),
                 )
             
                 self.conv_output = ResBlock(8 * init_size, 8 * init_size, kernel_size=(3, 1, 1), padding=0, stride=(2, 1, 1), indice_key="out") 
@@ -381,7 +381,11 @@ class Asymm_3d_spconv(nn.Module):
         if self.use_conv_input:
             x = self.conv_input(x)
 
-        x_conv1 = self.conv1(x)
+        if not self.dilate:
+            x_conv1 = self.conv1(x)
+        else:
+            x_conv1 = x
+
         down1c = self.conv2(x_conv1)
         down2c = self.conv3(down1c)
         down3c = self.conv4(down2c)

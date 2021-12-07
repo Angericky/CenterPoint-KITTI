@@ -324,9 +324,9 @@ class CenterHead(nn.Module):
             anno_boxes = [torch.stack(anno_boxes_).to(device)
                         for anno_boxes_ in anno_boxes]
 
-            anno_boxes_origin = np.array(anno_boxes_origin).transpose(1, 0).tolist()
-            anno_boxes_origin = [torch.stack(anno_boxes_).to(device)
-                        for anno_boxes_ in anno_boxes_origin]
+            # anno_boxes_origin = np.array(anno_boxes_origin).transpose(1, 0).tolist()
+            # anno_boxes_origin = [torch.stack(anno_boxes_).to(device)
+            #             for anno_boxes_ in anno_boxes_origin]
             # transpose inds
             inds = np.array(inds).transpose(1, 0).tolist()
             inds = [torch.stack(inds_).to(device) for inds_ in inds]
@@ -341,9 +341,9 @@ class CenterHead(nn.Module):
             anno_boxes = [torch.stack(anno_boxes_).to(device)
                         for anno_boxes_ in anno_boxes]
 
-            anno_boxes_origin = [[anno_boxes_origin[0][0]]]
-            anno_boxes_origin = [torch.stack(anno_boxes_).to(device)
-                        for anno_boxes_ in anno_boxes_origin]
+            # anno_boxes_origin = [[anno_boxes_origin[0][0]]]
+            # anno_boxes_origin = [torch.stack(anno_boxes_).to(device)
+            #             for anno_boxes_ in anno_boxes_origin]
 
             # transpose inds
             inds = [[inds[0][0]]]
@@ -383,7 +383,7 @@ class CenterHead(nn.Module):
             'anno_boxes': anno_boxes,
             'inds': inds,
             'masks': masks,
-            'anno_boxes_origin': anno_boxes_origin,
+            # 'anno_boxes_origin': anno_boxes_origin,
         }
 
         return all_targets_dict

@@ -201,8 +201,10 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
                 logger.info('recall_rcnn_%s_cyc: %f' % (cur_thresh, cur_rcnn_recall))
 
 
-        #with open(result_dir / 'result.pkl', 'wb') as f:
-        #    pickle.dump(det_annos, f)
+        with open(result_dir / 'result.pkl', 'wb') as f:
+            pickle.dump(det_annos, f)
+        
+        
         for det_annos in det_annos_list:
             total_pred_objects = 0
             for anno in det_annos:
@@ -254,8 +256,8 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
             logger.info('recall_roi_%s_cyc: %f' % (cur_thresh, cur_roi_recall))
             logger.info('recall_rcnn_%s_cyc: %f' % (cur_thresh, cur_rcnn_recall))
 
-        # with open(result_dir / 'result.pkl', 'wb') as f:
-        #    pickle.dump(det_annos, f)
+        with open(result_dir / 'result.pkl', 'wb') as f:
+           pickle.dump(det_annos, f)
 
         total_pred_objects = 0
         for anno in det_annos:
