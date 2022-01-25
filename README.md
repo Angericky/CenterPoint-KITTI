@@ -1,8 +1,8 @@
 # CylinDet
 
-3D Object Detection and Tracking using center points in the bird-eye view.
+3D Object Detection in the cylindrical bird-eye view.
 
-<p align="center"> <img src='docs/teaser.png' align="center" height="230px"> </p>
+<!-- <p align="center"> <img src='docs/teaser.png' align="center" height="230px"> </p> -->
 
 > [**CylinDet: LiDAR-based 3D Object Detection under Cylindrical Representation**]()                 
 This repo is the original implementation of CylinDet on the KITTI dataset. Pretrained models are coming soon. 
