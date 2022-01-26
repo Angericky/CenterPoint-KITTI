@@ -4,7 +4,7 @@
 
 <!-- <p align="center"> <img src='docs/teaser.png' align="center" height="230px"> </p> -->
 
-<p align="center"> <img src='cylindrical_view.png' align="center" height="300px"> </p>
+<!-- <p align="center"> <img src='cylindrical_view.png' align="center" height="300px"> </p> -->
 
 > [**CylinDet: LiDAR-based 3D Object Detection under Cylindrical Representation**]()      
 <p align="center"> <img src='framework.png' align="center"> </p>           
